@@ -40,6 +40,14 @@ jobs_lock = threading.Lock()
 
 MAX_JOBS = 20
 
+# Only one CPU-heavy render may run at a time. OpenCV + ffmpeg can
+# overwhelm a small instance, so busy /generate calls get 429.
+MAX_ACTIVE_RENDERS = 1
+RENDER_BUSY_MESSAGE = (
+    "A video is already being generated. "
+    "Please wait for it to finish and try again."
+)
+
 
 @app.errorhandler(RequestEntityTooLarge)
 def file_too_large(error):
@@ -50,6 +58,12 @@ def file_too_large(error):
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/health")
+def health():
+    """Lightweight liveness probe for Render (no heavy work)."""
+    return jsonify({"status": "ok"})
 
 
 @app.route("/assets/<path:filename>")
@@ -187,6 +201,18 @@ def generate():
         log.warning("POST /generate: empty file field")
         return jsonify({"error": "No face image uploaded."}), 400
 
+    # Only one active render at a time: OpenCV + ffmpeg are CPU-heavy,
+    # and parallel renders would starve a small instance.
+    with jobs_lock:
+        active_renders = sum(
+            1 for job in jobs.values()
+            if job["status"] in ("starting", "rendering")
+        )
+    if active_renders >= MAX_ACTIVE_RENDERS:
+        log.warning("POST /generate: rejected (%d active renders)",
+                    active_renders)
+        return jsonify({"error": RENDER_BUSY_MESSAGE}), 429
+
     job_id = uuid.uuid4().hex[:8]
     face_png = os.path.join(config.UPLOADS_DIR, job_id + "_face.png")
     bg_preview = os.path.join(config.TMP_DIR, job_id + "_bg_preview.mp4")
@@ -215,24 +241,54 @@ def generate():
         return jsonify({"error": "Could not save upload: %s" % exc}), 500
 
     # Register the job BEFORE starting the thread so the first poll
-    # can never 404.
+    # can never 404. Re-check for an active render under the lock: a
+    # render may have started while the upload was being saved.
     with jobs_lock:
-        jobs[job_id] = {
-            "status": "starting",
-            "phase": "",
-            "frame": 0,
-            "total": 0,
-            "percent": 0,
-            "error": None,
-            "final_video": final_video,
-        }
-        _evict_old_jobs_locked()
+        busy = sum(
+            1 for job in jobs.values()
+            if job["status"] in ("starting", "rendering")
+        ) >= MAX_ACTIVE_RENDERS
 
-    threading.Thread(
-        target=_run_render,
-        args=(job_id, face_png, bg_preview, final_video),
-        daemon=True,
-    ).start()
+        if not busy:
+            jobs[job_id] = {
+                "status": "starting",
+                "phase": "",
+                "frame": 0,
+                "total": 0,
+                "percent": 0,
+                "error": None,
+                "final_video": final_video,
+            }
+            _evict_old_jobs_locked()
+
+    if busy:
+        # Lost the race to a concurrent request — drop the saved upload.
+        try:
+            os.remove(face_png)
+        except OSError:
+            pass
+        log.warning("[%s] Rejected: another render is active", job_id)
+        return jsonify({"error": RENDER_BUSY_MESSAGE}), 429
+
+    try:
+        threading.Thread(
+            target=_run_render,
+            args=(job_id, face_png, bg_preview, final_video),
+            daemon=True,
+        ).start()
+    except Exception as exc:
+        # Never leave a job stuck in "starting" — the busy check counts
+        # it as active and would 429-reject every later render forever.
+        log.exception("[%s] Could not start render thread", job_id)
+        with jobs_lock:
+            jobs.pop(job_id, None)
+        for path in (face_png, bg_preview, final_video):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except OSError:
+                pass
+        return jsonify({"error": "Could not start render: %s" % exc}), 500
 
     return jsonify({"job_id": job_id}), 202
 
