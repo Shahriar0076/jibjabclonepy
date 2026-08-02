@@ -1164,6 +1164,19 @@
     progressText.textContent = label || "";
   }
 
+  function formatEta(seconds) {
+    if (seconds == null || !isFinite(seconds) || seconds <= 0) {
+      return "";
+    }
+    const s = Math.max(5, Math.round(seconds / 5) * 5);
+    if (s < 60) {
+      return "~" + s + "s left";
+    }
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return "~" + m + "m" + (r ? " " + r + "s" : "") + " left";
+  }
+
   function failRender(message) {
     stopPolling();
     generateButton.disabled = false;
@@ -1250,9 +1263,11 @@
             return;
           }
           const label = PHASE_LABELS[job.phase] || "Rendering";
+          const eta = formatEta(job.eta);
           setProgress(
             job.percent,
-            label + "… " + Math.round(job.percent) + "%",
+            label + "… " + Math.round(job.percent) + "%"
+              + (eta ? " · " + eta : ""),
             job.phase === "remux"
           );
         })

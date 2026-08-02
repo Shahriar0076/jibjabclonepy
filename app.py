@@ -76,9 +76,69 @@ def assets(filename):
 # Job helpers
 # ----------------------------
 def _update_job(job_id, **fields):
+    """Update a job record; maintain the ETA progress history."""
     with jobs_lock:
-        if job_id in jobs:
-            jobs[job_id].update(fields)
+        job = jobs.get(job_id)
+        if job is None:
+            return
+
+        # A new phase has its own percent-vs-time slope: stale points
+        # from the previous phase would skew the ETA fit.
+        if "phase" in fields and fields["phase"] != job.get("phase"):
+            job["eta_history"] = []
+
+        if "percent" in fields and fields["percent"] != job.get("percent"):
+            history = job.setdefault("eta_history", [])
+            now = time.time()
+            history.append((now, fields["percent"]))
+
+            # Prune: keep points within the window, then cap the length
+            # (drop the OLDEST extras so the fit always uses recent data).
+            cutoff = now - ETA_HISTORY_WINDOW
+            first = 0
+            while first < len(history) and history[first][0] < cutoff:
+                first += 1
+            del history[:first]
+            del history[:max(0, len(history) - ETA_HISTORY_MAX)]
+
+        job.update(fields)
+
+
+def _estimate_eta(history, percent):
+    """Seconds until the render hits 100%, from a least-squares fit of
+    recent (timestamp, percent) points. None when there is not enough
+    data or the rate is not measurable (e.g. percent is frozen).
+    """
+    if percent >= 100:
+        return 0
+
+    now = time.time()
+    pts = [(t, p) for t, p in history if now - t <= ETA_HISTORY_WINDOW]
+
+    if len(pts) < 3:
+        return None
+
+    n = len(pts)
+
+    # Center timestamps around their mean: raw epoch values (~1.7e9) would
+    # cancel catastrophically in the LS sums (float64 keeps ~16 digits).
+    t0 = sum(t for t, _ in pts) / n
+    sxx = sum((t - t0) * (t - t0) for t, _ in pts)
+    sxy = sum((t - t0) * p for t, p in pts)
+
+    if sxx <= 0:
+        return None
+
+    slope = sxy / sxx  # percent gained per second
+    if slope <= 0:
+        return None
+
+    eta = (100.0 - percent) / slope
+    return round(min(max(eta, 0.0), 3600.0))
+
+
+ETA_HISTORY_WINDOW = 30.0  # seconds of progress history used for the ETA fit
+ETA_HISTORY_MAX = 200      # hard cap on stored (time, percent) points
 
 
 def _evict_old_jobs_locked():
@@ -144,6 +204,7 @@ def _run_render(job_id, face_png, bg_preview, final_video):
             progress_callback=_make_progress_callback(
                 job_id, "overlay", *config.PHASE_2_WEIGHT,
                 remux_phase="finalize_bg",
+                remux_target=config.PHASE_3_WEIGHT[0],
             ),
         )
         log.info("[%s] Phase 2 done in %.1fs", job_id, time.time() - t1)
@@ -258,6 +319,7 @@ def generate():
                 "percent": 0,
                 "error": None,
                 "final_video": final_video,
+                "eta_history": [],
             }
             _evict_old_jobs_locked()
 
@@ -298,6 +360,7 @@ def progress(job_id):
     """Current render state for the browser's progress bar."""
     with jobs_lock:
         job = jobs.get(job_id)
+        history = list(job.get("eta_history", [])) if job else []
 
     if job is None:
         return jsonify({"error": "Unknown job."}), 404
@@ -308,6 +371,7 @@ def progress(job_id):
         "frame": job.get("frame", 0),
         "total": job.get("total", 0),
         "percent": job.get("percent", 0),
+        "eta": _estimate_eta(history, job.get("percent", 0)),
         "error": job.get("error"),
     })
 

@@ -13,6 +13,8 @@ the same output the Python pipeline (phases 2 + 3) produces, entirely from the b
 3. `services/composite.py` — phase 3: composites the rotoscoped foreground
    (`assets/foreground/fg_preview.mp4`) over it with a brightness matte → `final.mp4`.
 4. `services/media.py` — ffmpeg remux (H.264 + AAC audio) shared by both phases.
+5. `/api/progress/<job_id>` also returns `eta` — estimated seconds remaining
+   (server-side fit of recent progress); the UI shows it as "~1m 30s left".
 
 ## Setup
 

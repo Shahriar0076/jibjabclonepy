@@ -46,8 +46,13 @@ ALPHA_SAFE = 0.05       # floor used when un-multiplying black contamination
 # ----------------------------
 # Progress reporting (percent ranges per render phase)
 # ----------------------------
-PHASE_2_WEIGHT = (0, 14)    # overlay loop covers 0–14%
-PHASE_3_WEIGHT = (14, 90)   # composite loop covers 14–90%
+PHASE_2_WEIGHT = (0, 25)    # overlay loop covers 0–25%
+PHASE_3_WEIGHT = (40, 90)   # composite loop covers 40–90%; the phase-2
+                            # audio remux glides 25→40 so the ETA estimate
+                            # never stalls on a frozen percentage.
+                            # Spans are sized to typical Render phase
+                            # durations (remuxes are slow there) so the
+                            # ETA stays sane across phase changes.
 
 # ----------------------------
 # ffmpeg delivery settings
