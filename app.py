@@ -440,5 +440,7 @@ if __name__ == "__main__":
             except OSError:
                 pass
 
-    log.info("Starting server on http://127.0.0.1:5000")
-    app.run(host="127.0.0.1", port=5000, threaded=True, debug=False)
+    log.info("Starting server on http://0.0.0.0:5000")
+    # 0.0.0.0 so phones/tablets on the same Wi-Fi can test at
+    # http://<PC-LAN-IP>:5000 (find it with `ipconfig`).
+    app.run(host="0.0.0.0", port=5000, threaded=True, debug=False)

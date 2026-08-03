@@ -254,16 +254,24 @@
     display: block;
     overflow: visible;
     cursor: grab;
-    /* On phones the face panel covers a large part of the screen.
-       `none` made every swipe that starts on the photo a face-drag,
-       so the page could not be scrolled after picking a photo.
-       `pan-y` lets vertical swipes scroll the page; horizontal drags
-       still move the face (see the pointermove threshold below). */
+    /* Touches that start OUTSIDE the face oval land on the svg itself:
+       `pan-y` lets vertical swipes scroll the page. Touches that start
+       INSIDE the oval land on #faceOvalHit, which declares
+       `touch-action: none`, so those drags move the face instead of
+       scrolling (see the pointerdown gate in the script). */
     touch-action: pan-y;
   }
 
   svg.face-svg.dragging {
     cursor: grabbing;
+  }
+
+  /* The face oval doubles as the drag surface: it is transparent, sits
+     on top of the photo, and grabs every touch that starts inside the
+     oval. `touch-action: none` tells the browser to never scroll when a
+     touch begins there — the gesture belongs to the face, not the page. */
+  #faceOvalHit {
+    touch-action: none;
   }
 
   .guide {
@@ -334,9 +342,9 @@
 
   label {
     display: grid;
-    grid-template-columns: 92px 1fr 55px;
+    grid-template-columns: 92px 30px minmax(0, 1fr) 30px 55px;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     font-size: 14px;
     font-weight: 700;
   }
@@ -406,6 +414,57 @@
     background: #fff;
     border: 3px solid var(--primary);
     box-shadow: 0 2px 6px rgba(0, 0, 0, .45);
+  }
+
+  /* − / + nudge buttons beside each slider */
+  .step-btn {
+    width: 100%;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid rgba(148, 163, 184, .3);
+    border-radius: 10px;
+    background: rgba(148, 163, 184, .07);
+    color: var(--muted);
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      background .15s ease,
+      border-color .15s ease,
+      color .15s ease,
+      transform .1s ease;
+  }
+
+  .step-btn svg {
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+  }
+
+  /* Hover/pressed feedback is JS-driven via .is-hover / .is-press
+     classes (see the step-button script below). Pure CSS :hover / :active
+     stick on touch screens after a tap, so the previously-tapped button
+     of a −/+ pair stays highlighted when the other one is used. The JS
+     only adds these classes for real mouse pointers and clears them on
+     pointerup / pointerleave, so a state can never leak to the other
+     button. */
+  .step-btn.is-hover:not(:disabled) {
+    border-color: var(--primary);
+    background: rgba(236, 72, 153, .14);
+    color: #fff;
+  }
+
+  .step-btn.is-press:not(:disabled) {
+    transform: scale(.88);
+  }
+
+  .step-btn:disabled {
+    opacity: .3;
+    cursor: default;
   }
 
   .note {
@@ -530,8 +589,14 @@
     gap: 18px;
   }
 
-  #resultVideo {
+  .video-wrap {
+    position: relative;
     width: min(760px, 100%);
+  }
+
+  #resultVideo {
+    width: 100%;
+    display: block;
     border-radius: 16px;
     background: #000;
     border: 1px solid var(--border);
@@ -540,6 +605,35 @@
 
   #resultVideo.video-active {
     animation: videoPop .45s cubic-bezier(.34, 1.56, .64, 1);
+  }
+
+  /* Shown only when iOS forced muted autoplay: one tap restores sound. */
+  .unmute-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 0;
+    border-radius: 999px;
+    padding: 9px 16px;
+    background: rgba(15, 23, 42, .88);
+    color: #fff;
+    font-family: "Nunito", system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: .2px;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(2, 6, 23, .55);
+    backdrop-filter: blur(4px);
+  }
+
+  .unmute-hint svg {
+    width: 15px;
+    height: 15px;
+    flex: none;
   }
 
   @keyframes videoPop {
@@ -617,6 +711,22 @@
     }
   }
 
+  /* Narrow screens: label on its own row, controls row below it. */
+  @media (max-width: 560px) {
+    label {
+      grid-template-columns: 34px minmax(0, 1fr) 34px 52px;
+      row-gap: 8px;
+    }
+
+    .label-text {
+      grid-column: 1 / -1;
+    }
+
+    .step-btn {
+      height: 34px;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation: none !important;
@@ -650,7 +760,7 @@
   <div class="stage">
     <div class="stage-loader" id="stageLoader" hidden>
       <div class="spinner"></div>
-      <span>Loading photo…</span>
+      <span>Preparing your photo…</span>
     </div>
 
     <div class="guide eye" aria-hidden="true">
@@ -708,7 +818,8 @@
         </g>
 
         <path d="M 42.96 0.76 Q 42.24 0.87 41.52 1.00 Q 40.81 1.13 40.11 1.29 Q 39.40 1.44 38.71 1.61 Q 38.02 1.79 37.33 1.98 Q 36.64 2.17 35.97 2.39 Q 35.29 2.60 34.62 2.84 Q 33.96 3.07 33.30 3.32 Q 32.64 3.57 31.98 3.83 Q 31.33 4.10 30.69 4.38 Q 30.04 4.66 29.40 4.96 Q 28.76 5.25 28.13 5.56 Q 27.50 5.87 26.87 6.19 Q 26.25 6.51 25.63 6.85 Q 25.01 7.19 24.40 7.54 Q 23.79 7.89 23.19 8.26 Q 22.58 8.63 21.99 9.01 Q 21.39 9.40 20.80 9.80 Q 20.22 10.20 19.64 10.62 Q 19.07 11.04 18.50 11.48 Q 17.94 11.92 17.39 12.38 Q 16.84 12.83 16.30 13.31 Q 15.76 13.78 15.24 14.28 Q 14.72 14.77 14.22 15.28 Q 13.71 15.79 13.23 16.31 Q 12.74 16.84 12.27 17.38 Q 11.81 17.92 11.36 18.48 Q 10.91 19.03 10.48 19.60 Q 10.05 20.17 9.64 20.75 Q 9.22 21.33 8.83 21.93 Q 8.44 22.52 8.06 23.12 Q 7.69 23.73 7.33 24.34 Q 6.97 24.95 6.63 25.58 Q 6.29 26.20 5.97 26.83 Q 5.64 27.46 5.34 28.11 Q 5.03 28.75 4.74 29.39 Q 4.45 30.04 4.18 30.70 Q 3.91 31.36 3.65 32.02 Q 3.40 32.68 3.16 33.36 Q 2.93 34.03 2.71 34.71 Q 2.49 35.39 2.29 36.07 Q 2.09 36.76 1.91 37.45 Q 1.73 38.15 1.57 38.85 Q 1.40 39.55 1.26 40.26 Q 1.12 40.97 1.00 41.69 Q 0.88 42.41 0.77 43.13 Q 0.67 43.86 0.58 44.59 Q 0.50 45.32 0.43 46.06 Q 0.36 46.80 0.31 47.55 Q 0.25 48.29 0.21 49.05 Q 0.17 49.80 0.14 50.55 Q 0.11 51.31 0.09 52.07 Q 0.07 52.83 0.06 53.60 Q 0.04 54.36 0.03 55.13 Q 0.02 55.89 0.02 56.66 Q 0.01 57.43 0.01 58.20 Q 0.01 58.97 0.01 59.74 Q 0.01 60.51 0.01 61.27 Q 0.01 62.04 0.01 62.81 Q 0.02 63.58 0.02 64.34 Q 0.03 65.11 0.04 65.87 Q 0.04 66.64 0.06 67.40 Q 0.07 68.16 0.08 68.92 Q 0.10 69.67 0.12 70.43 Q 0.14 71.18 0.16 71.94 Q 0.19 72.69 0.22 73.43 Q 0.25 74.18 0.29 74.93 Q 0.32 75.67 0.36 76.42 Q 0.41 77.16 0.45 77.90 Q 0.50 78.64 0.55 79.38 Q 0.60 80.12 0.66 80.86 Q 0.71 81.60 0.77 82.34 Q 0.83 83.08 0.89 83.82 Q 0.95 84.56 1.02 85.31 Q 1.08 86.05 1.14 86.79 Q 1.20 87.53 1.27 88.28 Q 1.33 89.02 1.39 89.76 Q 1.46 90.51 1.52 91.25 Q 1.58 92.00 1.65 92.74 Q 1.71 93.49 1.77 94.23 Q 1.83 94.98 1.90 95.72 Q 1.96 96.47 2.02 97.21 Q 2.09 97.96 2.15 98.70 Q 2.22 99.45 2.28 100.19 Q 2.35 100.93 2.41 101.68 Q 2.48 102.42 2.55 103.16 Q 2.62 103.91 2.69 104.65 Q 2.76 105.39 2.84 106.13 Q 2.92 106.87 3.00 107.60 Q 3.08 108.34 3.17 109.08 Q 3.25 109.81 3.35 110.54 Q 3.44 111.28 3.54 112.01 Q 3.64 112.74 3.75 113.46 Q 3.86 114.19 3.98 114.91 Q 4.10 115.63 4.22 116.35 Q 4.35 117.07 4.49 117.79 Q 4.62 118.50 4.76 119.21 Q 4.91 119.92 5.06 120.63 Q 5.22 121.34 5.38 122.04 Q 5.54 122.75 5.71 123.45 Q 5.88 124.15 6.06 124.85 Q 6.24 125.54 6.43 126.24 Q 6.61 126.93 6.81 127.62 Q 7.00 128.31 7.21 129.00 Q 7.41 129.68 7.62 130.36 Q 7.84 131.05 8.06 131.72 Q 8.28 132.40 8.51 133.07 Q 8.74 133.75 8.98 134.42 Q 9.22 135.08 9.47 135.75 Q 9.72 136.41 9.98 137.07 Q 10.24 137.72 10.51 138.37 Q 10.78 139.02 11.07 139.67 Q 11.35 140.31 11.65 140.95 Q 11.94 141.59 12.25 142.22 Q 12.56 142.85 12.88 143.47 Q 13.20 144.09 13.54 144.71 Q 13.87 145.32 14.23 145.93 Q 14.58 146.53 14.94 147.13 Q 15.31 147.73 15.69 148.31 Q 16.07 148.90 16.46 149.48 Q 16.86 150.06 17.27 150.62 Q 17.68 151.19 18.11 151.75 Q 18.54 152.30 18.98 152.84 Q 19.43 153.39 19.89 153.92 Q 20.35 154.45 20.83 154.97 Q 21.30 155.49 21.80 155.99 Q 22.29 156.50 22.80 156.99 Q 23.31 157.48 23.83 157.95 Q 24.36 158.43 24.90 158.88 Q 25.44 159.34 25.99 159.77 Q 26.54 160.21 27.11 160.62 Q 27.68 161.04 28.25 161.43 Q 28.83 161.82 29.42 162.19 Q 30.01 162.56 30.61 162.90 Q 31.21 163.25 31.82 163.57 Q 32.43 163.89 33.05 164.18 Q 33.67 164.47 34.30 164.74 Q 34.92 165.01 35.56 165.26 Q 36.19 165.50 36.84 165.73 Q 37.48 165.95 38.14 166.14 Q 38.79 166.34 39.46 166.51 Q 40.13 166.68 40.81 166.82 Q 41.48 166.97 42.18 167.09 Q 42.87 167.21 43.57 167.30 Q 44.28 167.40 45.00 167.47 Q 45.72 167.55 46.45 167.60 Q 47.18 167.66 47.92 167.70 Q 48.66 167.74 49.42 167.77 Q 50.17 167.80 50.92 167.81 Q 51.68 167.83 52.44 167.84 Q 53.21 167.85 53.97 167.86 Q 54.74 167.86 55.50 167.86 Q 56.27 167.86 57.04 167.86 Q 57.80 167.86 58.57 167.85 Q 59.33 167.84 60.09 167.83 Q 60.85 167.81 61.61 167.79 Q 62.36 167.77 63.11 167.74 Q 63.85 167.71 64.59 167.66 Q 65.33 167.61 66.05 167.55 Q 66.78 167.49 67.49 167.40 Q 68.20 167.32 68.90 167.21 Q 69.60 167.10 70.29 166.97 Q 70.97 166.84 71.65 166.69 Q 72.32 166.53 72.98 166.35 Q 73.64 166.17 74.29 165.97 Q 74.94 165.76 75.59 165.53 Q 76.23 165.30 76.86 165.04 Q 77.49 164.79 78.12 164.50 Q 78.74 164.22 79.35 163.92 Q 79.97 163.61 80.58 163.29 Q 81.18 162.96 81.78 162.60 Q 82.38 162.25 82.96 161.87 Q 83.55 161.49 84.13 161.09 Q 84.70 160.69 85.26 160.27 Q 85.83 159.85 86.37 159.41 Q 86.92 158.96 87.46 158.50 Q 87.99 158.04 88.51 157.56 Q 89.03 157.08 89.53 156.58 Q 90.04 156.09 90.52 155.57 Q 91.01 155.06 91.48 154.54 Q 91.95 154.01 92.40 153.47 Q 92.85 152.94 93.29 152.39 Q 93.72 151.84 94.14 151.27 Q 94.56 150.71 94.97 150.14 Q 95.37 149.57 95.76 148.98 Q 96.15 148.40 96.52 147.81 Q 96.89 147.22 97.25 146.62 Q 97.61 146.02 97.95 145.41 Q 98.30 144.80 98.63 144.18 Q 98.96 143.56 99.28 142.94 Q 99.60 142.31 99.90 141.68 Q 100.21 141.05 100.50 140.41 Q 100.79 139.77 101.07 139.12 Q 101.35 138.48 101.62 137.82 Q 101.89 137.17 102.15 136.51 Q 102.40 135.85 102.65 135.18 Q 102.89 134.52 103.13 133.85 Q 103.36 133.18 103.59 132.50 Q 103.81 131.83 104.03 131.15 Q 104.25 130.46 104.45 129.78 Q 104.66 129.10 104.86 128.41 Q 105.06 127.72 105.25 127.03 Q 105.44 126.34 105.62 125.64 Q 105.81 124.94 105.98 124.25 Q 106.15 123.55 106.32 122.85 Q 106.49 122.14 106.65 121.44 Q 106.80 120.73 106.95 120.02 Q 107.10 119.31 107.24 118.60 Q 107.38 117.89 107.51 117.17 Q 107.65 116.45 107.77 115.73 Q 107.89 115.01 108.00 114.29 Q 108.12 113.56 108.22 112.84 Q 108.33 112.11 108.43 111.38 Q 108.52 110.65 108.61 109.91 Q 108.70 109.18 108.79 108.44 Q 108.87 107.71 108.95 106.97 Q 109.03 106.23 109.10 105.49 Q 109.18 104.75 109.25 104.01 Q 109.32 103.26 109.39 102.52 Q 109.45 101.78 109.52 101.03 Q 109.59 100.29 109.65 99.54 Q 109.71 98.80 109.78 98.06 Q 109.84 97.31 109.91 96.57 Q 109.97 95.82 110.03 95.08 Q 110.10 94.33 110.16 93.59 Q 110.22 92.84 110.29 92.10 Q 110.35 91.35 110.42 90.61 Q 110.48 89.87 110.55 89.12 Q 110.61 88.38 110.68 87.64 Q 110.74 86.90 110.81 86.16 Q 110.87 85.41 110.93 84.67 Q 111.00 83.93 111.06 83.19 Q 111.12 82.45 111.18 81.71 Q 111.24 80.97 111.29 80.24 Q 111.35 79.50 111.40 78.76 Q 111.45 78.01 111.49 77.27 Q 111.53 76.53 111.57 75.79 Q 111.61 75.04 111.64 74.30 Q 111.68 73.55 111.70 72.80 Q 111.73 72.05 111.75 71.30 Q 111.77 70.54 111.79 69.78 Q 111.81 69.03 111.82 68.27 Q 111.83 67.51 111.84 66.74 Q 111.85 65.98 111.85 65.22 Q 111.86 64.45 111.86 63.68 Q 111.86 62.92 111.87 62.15 Q 111.87 61.38 111.87 60.61 Q 111.87 59.84 111.87 59.07 Q 111.87 58.30 111.86 57.53 Q 111.86 56.76 111.85 56.00 Q 111.85 55.23 111.84 54.46 Q 111.83 53.70 111.81 52.93 Q 111.80 52.17 111.77 51.41 Q 111.75 50.65 111.72 49.89 Q 111.68 49.14 111.64 48.39 Q 111.60 47.64 111.54 46.89 Q 111.48 46.15 111.40 45.41 Q 111.33 44.68 111.24 43.95 Q 111.14 43.22 111.03 42.49 Q 110.92 41.77 110.79 41.06 Q 110.66 40.34 110.51 39.64 Q 110.36 38.93 110.19 38.23 Q 110.02 37.54 109.83 36.84 Q 109.64 36.15 109.43 35.47 Q 109.22 34.79 109.00 34.11 Q 108.77 33.44 108.53 32.77 Q 108.28 32.10 108.02 31.44 Q 107.76 30.78 107.48 30.13 Q 107.20 29.48 106.90 28.83 Q 106.61 28.19 106.30 27.55 Q 105.98 26.92 105.65 26.29 Q 105.32 25.67 104.98 25.05 Q 104.63 24.44 104.27 23.83 Q 103.90 23.23 103.52 22.64 Q 103.14 22.04 102.74 21.46 Q 102.34 20.88 101.92 20.32 Q 101.50 19.75 101.06 19.20 Q 100.62 18.64 100.16 18.11 Q 99.71 17.57 99.23 17.05 Q 98.75 16.53 98.26 16.02 Q 97.77 15.52 97.26 15.03 Q 96.75 14.54 96.22 14.07 Q 95.69 13.59 95.15 13.14 Q 94.61 12.68 94.06 12.24 Q 93.51 11.79 92.94 11.37 Q 92.38 10.94 91.80 10.52 Q 91.23 10.11 90.64 9.71 Q 90.06 9.31 89.46 8.93 Q 88.87 8.54 88.27 8.17 Q 87.67 7.80 87.06 7.44 Q 86.45 7.08 85.83 6.74 Q 85.21 6.39 84.59 6.06 Q 83.96 5.73 83.33 5.42 Q 82.70 5.10 82.06 4.81 Q 81.42 4.51 80.77 4.22 Q 80.13 3.94 79.47 3.67 Q 78.82 3.41 78.16 3.16 Q 77.50 2.91 76.83 2.68 Q 76.16 2.45 75.48 2.24 Q 74.80 2.03 74.12 1.85 Q 73.43 1.66 72.74 1.49 Q 72.04 1.33 71.34 1.18 Q 70.63 1.04 69.92 0.91 Q 69.21 0.79 68.48 0.69 Q 67.76 0.59 67.03 0.51 Q 66.30 0.43 65.56 0.36 Q 64.82 0.30 64.07 0.25 Q 63.32 0.20 62.57 0.17 Q 61.82 0.13 61.06 0.11 Q 60.30 0.08 59.54 0.07 Q 58.78 0.05 58.01 0.04 Q 57.25 0.04 56.48 0.03 Q 55.72 0.03 54.95 0.04 Q 54.18 0.04 53.42 0.05 Q 52.66 0.06 51.89 0.08 Q 51.13 0.10 50.38 0.12 Q 49.62 0.15 48.87 0.19 Q 48.11 0.23 47.37 0.28 Q 46.62 0.34 45.88 0.41 Q 45.14 0.48 44.41 0.57 Q 43.68 0.65 42.96 0.76 Z"
-              fill="none"
+              id="faceOvalHit"
+              fill="transparent"
               stroke="#f1f1f1"
               stroke-width="2.6"
               stroke-linejoin="round"
@@ -735,7 +846,13 @@
         </svg>
         Zoom
       </span>
+      <button id="zoomMinus" class="step-btn" type="button" aria-label="Zoom out">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+      </button>
       <input id="zoom" type="range" min=".1" max="30" step=".01" value="1">
+      <button id="zoomPlus" class="step-btn" type="button" aria-label="Zoom in">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+      </button>
       <output id="zoomValue">1.00</output>
     </label>
 
@@ -747,7 +864,13 @@
         </svg>
         Left/right
       </span>
+      <button id="moveXMinus" class="step-btn" type="button" aria-label="Move left">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+      </button>
       <input id="moveX" type="range" min="-3000" max="3000" step="1" value="0">
+      <button id="moveXPlus" class="step-btn" type="button" aria-label="Move right">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+      </button>
       <output id="moveXValue">0</output>
     </label>
 
@@ -759,7 +882,13 @@
         </svg>
         Up/down
       </span>
+      <button id="moveYMinus" class="step-btn" type="button" aria-label="Move down">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+      </button>
       <input id="moveY" type="range" min="-3000" max="3000" step="1" value="0">
+      <button id="moveYPlus" class="step-btn" type="button" aria-label="Move up">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+      </button>
       <output id="moveYValue">0</output>
     </label>
 
@@ -771,7 +900,13 @@
         </svg>
         Rotate
       </span>
+      <button id="rotateMinus" class="step-btn" type="button" aria-label="Rotate counter-clockwise">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+      </button>
       <input id="rotate" type="range" min="-180" max="180" step="1" value="0">
+      <button id="rotatePlus" class="step-btn" type="button" aria-label="Rotate clockwise">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+      </button>
       <output id="rotateValue">0°</output>
     </label>
 
@@ -801,7 +936,18 @@
   </section>
 
   <div class="result-area" id="resultArea" hidden>
-    <video id="resultVideo" controls></video>
+    <div class="video-wrap">
+      <video id="resultVideo" controls playsinline preload="auto"></video>
+
+      <button id="unmuteHint" class="unmute-hint" type="button" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M11 5 6 9H3v6h3l5 4z"/>
+          <path d="M15.5 8.5a5 5 0 0 1 0 7"/>
+          <path d="M18.5 5.5a9.5 9.5 0 0 1 0 13"/>
+        </svg>
+        Tap for sound
+      </button>
+    </div>
 
     <button id="downloadButton" class="generate-button" type="button" hidden>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -851,6 +997,7 @@
 <script>
   const faceSvg = document.getElementById("faceSvg");
   const faceImage = document.getElementById("faceImage");
+  const faceOvalHit = document.getElementById("faceOvalHit");
   const upload = document.getElementById("upload");
   const zoom = document.getElementById("zoom");
   const moveX = document.getElementById("moveX");
@@ -895,11 +1042,109 @@
     moveXValue.value = Math.round(x);
     moveYValue.value = Math.round(y);
     rotateValue.value = Math.round(rotation) + "°";
+
+    syncStepButtons();
   }
 
   [zoom, moveX, moveY, rotate].forEach((control) => {
     control.addEventListener("input", update);
   });
+
+  // -------- Step buttons: − / + nudge each slider, hold to repeat --------
+  // Per-control nudge size (a single press; the slider itself stays fine-tuned).
+  const STEP_BY_CONTROL = { zoom: 0.05, moveX: 10, moveY: 10, rotate: 1 };
+
+  const stepButtons = [
+    { button: document.getElementById("zoomMinus"), input: zoom, delta: -1 },
+    { button: document.getElementById("zoomPlus"), input: zoom, delta: 1 },
+    { button: document.getElementById("moveXMinus"), input: moveX, delta: -1 },
+    { button: document.getElementById("moveXPlus"), input: moveX, delta: 1 },
+    { button: document.getElementById("moveYMinus"), input: moveY, delta: -1 },
+    { button: document.getElementById("moveYPlus"), input: moveY, delta: 1 },
+    { button: document.getElementById("rotateMinus"), input: rotate, delta: -1 },
+    { button: document.getElementById("rotatePlus"), input: rotate, delta: 1 },
+  ];
+
+  function syncStepButtons() {
+    stepButtons.forEach(({ button, input, delta }) => {
+      const min = parseFloat(input.min);
+      const max = parseFloat(input.max);
+      const step = STEP_BY_CONTROL[input.id];
+      const value = parseFloat(input.value);
+      button.disabled =
+        delta < 0 ? value <= min + step / 2 : value >= max - step / 2;
+      if (button.disabled) {
+        // No hover/press feedback on a disabled button.
+        button.classList.remove("is-hover", "is-press");
+      }
+    });
+  }
+
+  stepButtons.forEach(({ button, input, delta }) => {
+    let repeatTimer = null;
+
+    function stopRepeat() {
+      if (repeatTimer !== null) {
+        clearTimeout(repeatTimer);
+        clearInterval(repeatTimer);
+        repeatTimer = null;
+      }
+    }
+
+    function nudge() {
+      if (button.disabled) return;
+      const min = parseFloat(input.min);
+      const max = parseFloat(input.max);
+      const step = STEP_BY_CONTROL[input.id];
+      const next = clamp(parseFloat(input.value) + delta * step, min, max);
+      input.value = next;
+      update();
+      if (next <= min || next >= max) stopRepeat(); // hit an edge
+    }
+
+    // Visual feedback is class-driven, not :hover / :active, because
+    // mobile browsers keep those pseudo-states applied after a tap —
+    // the previously-pressed button of a −/+ pair would stay highlighted
+    // while the other one is used. Classes are added only for a real
+    // mouse pointer and cleared on pointerup/pointerleave, so a state
+    // never leaks to the other button.
+    button.addEventListener("pointerenter", (event) => {
+      if (event.pointerType === "mouse" && !button.disabled) {
+        button.classList.add("is-hover");
+      }
+    });
+
+    button.addEventListener("pointerleave", () => {
+      button.classList.remove("is-hover", "is-press");
+    });
+
+    // Tap: one step. Hold: repeat after a short delay (handy for big ranges).
+    button.addEventListener("pointerdown", (event) => {
+      if (button.disabled) return;
+      event.preventDefault();
+      button.classList.add("is-press");
+      nudge();
+      repeatTimer = setTimeout(() => {
+        repeatTimer = setInterval(nudge, 90);
+      }, 350);
+    });
+
+    ["pointerup", "pointercancel"].forEach((type) => {
+      button.addEventListener(type, () => button.classList.remove("is-press"));
+    });
+
+    ["pointerup", "pointercancel", "pointerleave"].forEach((type) => {
+      button.addEventListener(type, stopRepeat);
+    });
+
+    // Keyboard activation (Enter/Space) fires click with detail 0;
+    // mouse/touch clicks are already handled by pointerdown above.
+    button.addEventListener("click", (event) => {
+      if (event.detail === 0) nudge();
+    });
+  });
+
+  syncStepButtons();
 
   upload.addEventListener("change", (event) => {
     const file = event.target.files && event.target.files[0];
@@ -966,9 +1211,9 @@
 
         // Auto-snap: detect the face and align it to the guide lines.
         const loaderText = loader.querySelector("span");
-        if (loaderText) loaderText.textContent = "Detecting face…";
+        if (loaderText) loaderText.textContent = "Aligning your photo…";
         snapToFace(probe).then((snapped) => {
-          if (loaderText) loaderText.textContent = "Loading photo…";
+          if (loaderText) loaderText.textContent = "Preparing your photo…";
           loader.hidden = true;
           if (snapped.found) {
             zoom.value = snapped.zoom.toFixed(2);
@@ -1154,8 +1399,9 @@
     }
   }
 
-  // Drag to move. Horizontal drags move the face; on touch devices a
-  // vertical swipe is left to the browser so the page scrolls instead.
+  // Drag to move the face. Only touches that begin INSIDE the face oval
+  // (on #faceOvalHit) drag; touches outside are left to the browser for
+  // page scrolling. The threshold just filters out micro-moves.
   const DRAG_THRESHOLD = 6; // px — ignore micro-moves so the browser can
                             // claim vertical pans as scroll without jitter.
 
@@ -1167,6 +1413,12 @@
   let startMoveY = 0;
 
   faceSvg.addEventListener("pointerdown", (event) => {
+    // Only pointer-downs that start INSIDE the face oval drag the face.
+    // #faceOvalHit carries `touch-action: none`, so those touches never
+    // scroll the page; touches that start outside (on the stage) fall
+    // through to the svg and scroll as normal.
+    if (event.target !== faceOvalHit) return;
+
     dragging = true;
     dragStarted = false;
     startClientX = event.clientX;
@@ -1357,6 +1609,7 @@
   const status = document.getElementById("status");
   const resultArea = document.getElementById("resultArea");
   const resultVideo = document.getElementById("resultVideo");
+  const unmuteHint = document.getElementById("unmuteHint");
   const downloadButton = document.getElementById("downloadButton");
   const progressWrap = document.getElementById("progressWrap");
   const progressFill = document.getElementById("progressFill");
@@ -1364,10 +1617,10 @@
 
   const POLL_INTERVAL_MS = 500;
   const PHASE_LABELS = {
-    overlay: "Placing face on background",
-    composite: "Compositing layers",
-    finalize_bg: "Finalizing background",
-    remux: "Finalizing",
+    overlay: "Rendering your photo",
+    composite: "Compositing the scene",
+    finalize_bg: "Adding audio",
+    remux: "Finalizing your video",
   };
 
   let resultUrl = null;
@@ -1404,9 +1657,70 @@
     generateButton.disabled = false;
     progressWrap.hidden = true;
     status.hidden = false;
-    status.textContent = "Error: " + message;
+    status.textContent = "Something went wrong: " + message;
     console.error("[face-guide] render failed:", message);
   }
+
+  // -------- Autoplay: start the finished video as soon as it appears --------
+  // -------- Autoplay: start the finished video with sound --------
+  // Desktop/Android: `play()` with sound is allowed (the user just clicked
+  // Generate). iOS blocks unmuted play() outside a user gesture — see
+  // primeAutoplay() below for how we unlock sound there. If play() still
+  // fails (older iOS, strict mode), fall back to muted autoplay with a
+  // tap-to-unmute chip.
+  function tryAutoplay(video) {
+    video.muted = false;
+
+    const attempt = video.play();
+    if (!attempt || typeof attempt.catch !== "function") return;
+
+    attempt.catch(() => {
+      // Could be a transient error (the blob is still loading) rather than
+      // a policy block — give the sound-on play one more chance once the
+      // video is actually playable before resorting to muted playback.
+      const retry = () => {
+        video.play().catch(() => {
+          video.muted = true;
+          video.play().catch(() => {});
+          unmuteHint.hidden = false;
+        });
+      };
+
+      if (video.readyState >= 1) {
+        retry();
+      } else {
+        video.addEventListener("loadedmetadata", retry, { once: true });
+        setTimeout(retry, 500); // safety net if metadata never fires
+      }
+    });
+  }
+
+  // -------- iOS sound unlock --------
+  // iOS only lets a video play WITH sound when play() runs inside a user
+  // gesture, but the render takes ~10-30 s — the Generate tap is long gone
+  // by then. Workaround: inside that tap, play a tiny silent clip in the
+  // SAME <video> element. WebKit marks the element as user-interacted and
+  // that exemption survives the src swap, so the finished video can
+  // autoplay with sound when it arrives.
+  const SILENT_CLIP = "/static/silent.mp4";
+
+  function primeAutoplay() {
+    resultVideo.muted = false;
+    resultVideo.src = SILENT_CLIP;
+    resultVideo.play().catch(() => {});
+  }
+
+  unmuteHint.addEventListener("click", () => {
+    resultVideo.muted = false;
+    resultVideo.play().catch(() => {});
+    unmuteHint.hidden = true;
+  });
+
+  // The chip is only a hint — once the user touches the video itself, the
+  // native controls take over (they expose their own mute toggle).
+  resultVideo.addEventListener("pointerdown", () => {
+    unmuteHint.hidden = true;
+  });
 
   function showVideo(videoBlob) {
     console.log("[face-guide] received final.mp4:", videoBlob.size, "bytes");
@@ -1419,7 +1733,7 @@
     resultVideo.src = resultUrl;
     resultArea.hidden = false;
     resultVideo.hidden = false;
-    resultVideo.play().catch(() => {});
+    tryAutoplay(resultVideo);
 
     // The video pops in growing past the card — grow the whole card with it.
     document.querySelector(".controls").classList.add("video-active");
@@ -1434,6 +1748,17 @@
       link.click();
       link.remove();
     };
+
+    // After the result appears, glide the page down to the video so it is
+    // visible without any manual scrolling — crucial on phones, where the
+    // result area sits well below the fold. Runs after layout so the just-
+    // unhidden video has a real position to scroll to.
+    requestAnimationFrame(() => {
+      const canSmooth = "scrollBehavior" in document.documentElement.style;
+      resultVideo.scrollIntoView(
+        canSmooth ? { behavior: "smooth", block: "center" } : true
+      );
+    });
   }
 
   function fetchResult(jobId) {
@@ -1480,7 +1805,7 @@
             throw new Error(job.error || "Render failed.");
           }
           if (job.status === "done") {
-            setProgress(100, "Done!", false);
+            setProgress(100, "Your video is ready!", false);
             fetchResult(jobId);
             return;
           }
@@ -1498,6 +1823,10 @@
   }
 
   generateButton.addEventListener("click", () => {
+    // Must run synchronously inside this tap so iOS counts it as a user
+    // gesture — this is what lets the finished video autoplay with sound.
+    primeAutoplay();
+
     getFacePngBlob((blob) => {
       const formData = new FormData();
       formData.append("face", blob, "face.png");
@@ -1505,10 +1834,11 @@
       generateButton.disabled = true;
       status.hidden = true;
       progressWrap.hidden = false;
-      setProgress(0, "Starting…", false);
+      setProgress(0, "Preparing your video…", false);
 
       // New render starts — hide the old result and shrink the card back.
       resultArea.hidden = true;
+      unmuteHint.hidden = true;
       document.querySelector(".controls").classList.remove("video-active");
       resultVideo.classList.remove("video-active");
 
