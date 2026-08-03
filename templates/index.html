@@ -49,6 +49,13 @@
     outline-offset: 2px;
   }
 
+  /* Kill iOS double-tap-zoom on the controls; taps stay taps. */
+  button,
+  label,
+  input[type="range"] {
+    touch-action: manipulation;
+  }
+
   .app {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -247,7 +254,12 @@
     display: block;
     overflow: visible;
     cursor: grab;
-    touch-action: none;
+    /* On phones the face panel covers a large part of the screen.
+       `none` made every swipe that starts on the photo a face-drag,
+       so the page could not be scrolled after picking a photo.
+       `pan-y` lets vertical swipes scroll the page; horizontal drags
+       still move the face (see the pointermove threshold below). */
+    touch-action: pan-y;
   }
 
   svg.face-svg.dragging {
@@ -711,9 +723,9 @@
         <path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
         <circle cx="12" cy="13" r="3.2"/>
       </svg>
-      <span>Choose a PNG photo</span>
+      <span>Choose a photo</span>
     </label>
-    <input id="upload" type="file" accept="image/png" hidden>
+    <input id="upload" type="file" accept="image/*" hidden>
 
     <label>
       <span class="label-text">
@@ -851,6 +863,7 @@
 
   const baseW = 112;
   const baseH = 168;
+  const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // reject > 25 MB before reading
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -890,6 +903,9 @@
     const file = event.target.files && event.target.files[0];
     if (!file) return;
 
+    // iOS Safari can leave odd focus/scroll state after the photo picker closes.
+    upload.blur();
+
     const loader = document.getElementById("stageLoader");
 
     function uploadError(message) {
@@ -900,61 +916,234 @@
       status.hidden = false;
     }
 
-    // Client-side PNG magic-byte check (\x89PNG\r\n\x1a\n).
-    const head = file.slice(0, 8);
-    const headReader = new FileReader();
+    // Cheap guard: skip obviously huge files before reading them into memory.
+    if (file.size > MAX_UPLOAD_BYTES) {
+      upload.value = "";
+      uploadError("That photo is too large — please choose one under 25 MB.");
+      return;
+    }
 
-    headReader.onload = () => {
-      const bytes = new Uint8Array(headReader.result);
-      const isPng =
-        bytes.length === 8 &&
-        bytes[0] === 0x89 && bytes[1] === 0x50 &&
-        bytes[2] === 0x4e && bytes[3] === 0x47 &&
-        bytes[4] === 0x0d && bytes[5] === 0x0a &&
-        bytes[6] === 0x1a && bytes[7] === 0x0a;
+    // Accept any image format the browser can decode (JPG, PNG, WebP, GIF,
+    // HEIC…). The face is re-encoded to the clipped 112×168 PNG client-side,
+    // so the server still receives a PNG. Reject only clear non-images here;
+    // everything else is validated by the decode check below.
+    const type = (file.type || "").toLowerCase();
+    if (
+      type &&
+      !type.startsWith("image/") &&
+      type !== "application/octet-stream" &&
+      type !== "binary/octet-stream"
+    ) {
+      upload.value = "";
+      uploadError("That file doesn't look like an image — please choose a photo (JPG, PNG, WebP, …).");
+      return;
+    }
 
-      if (!isPng) {
-        upload.value = "";
-        uploadError("Only PNG images are supported — please choose a PNG file.");
-        return;
-      }
+    document.getElementById("status").hidden = true;
+    loader.hidden = false;
 
-      document.getElementById("status").hidden = true;
-      loader.hidden = false;
+    // Remember what's on the stage so a failed decode can restore it.
+    const previousHref =
+      faceImage.getAttribute("href") ||
+      faceImage.getAttributeNS("http://www.w3.org/1999/xlink", "href");
 
-      const reader = new FileReader();
+    const reader = new FileReader();
 
-      reader.onload = () => {
-        faceImage.setAttribute("href", reader.result);
+    reader.onload = () => {
+      faceImage.setAttribute("href", reader.result);
+
+      // Wait for the photo to decode before touching the sliders or hiding
+      // the loader. If it can't be decoded, restore the previous photo.
+      const probe = new Image();
+      probe.onload = () => {
         zoom.value = "1";
         moveX.value = "0";
         moveY.value = "0";
         rotate.value = "0";
         update();
 
-        // Wait for the photo to decode before hiding the loader.
-        const probe = new Image();
-        probe.onload = () => { loader.hidden = true; };
-        probe.onerror = () => { loader.hidden = true; };
-        probe.src = reader.result;
+        // Auto-snap: detect the face and align it to the guide lines.
+        const loaderText = loader.querySelector("span");
+        if (loaderText) loaderText.textContent = "Detecting face…";
+        snapToFace(probe).then((snapped) => {
+          if (loaderText) loaderText.textContent = "Loading photo…";
+          loader.hidden = true;
+          if (snapped.found) {
+            zoom.value = snapped.zoom.toFixed(2);
+            moveX.value = Math.round(snapped.moveX);
+            moveY.value = Math.round(snapped.moveY);
+            rotate.value = Math.round(snapped.rotate);
+            update();
+          } else if (!snapped.error) {
+            uploadError("No face detected — please position the photo manually.");
+          }
+          // snapped.error → detection infra failed; keep default position.
+        });
       };
-
-      reader.onerror = () => {
+      probe.onerror = () => {
         loader.hidden = true;
+        faceImage.setAttribute("href", previousHref);
+        upload.value = "";
+        uploadError("Couldn't read that image — please choose a different photo (JPG, PNG, WebP, …).");
       };
-
-      reader.readAsDataURL(file);
+      probe.src = reader.result;
     };
 
-    headReader.onerror = () => {
+    reader.onerror = () => {
       loader.hidden = true;
+      upload.value = "";
+      uploadError("Couldn't read that file — please try again.");
     };
 
-    headReader.readAsArrayBuffer(head);
+    reader.readAsDataURL(file);
   });
 
-  // Drag to move
-  let dragging = false;
+  // -------- Auto-snap: detect the uploaded face and align it to the guides --------
+  // Guide positions in SVG units of the 112×168 panel — must match the CSS:
+  // .guide.eye { top: 43.8% } → 168·0.438, .guide.mouth { top: 73.7% } → 168·0.737.
+  const EYE_GUIDE_Y = 168 * 0.438;
+  const MOUTH_GUIDE_Y = 168 * 0.737;
+  const GUIDE_GAP = MOUTH_GUIDE_Y - EYE_GUIDE_Y;
+
+  let faceApiPromise = null;
+
+  // Lazily load the face-api script and its models (cached across uploads).
+  function loadFaceApi() {
+    if (!faceApiPromise) {
+      faceApiPromise = new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "/static/face-api.js";
+        script.onload = resolve;
+        script.onerror = () => reject(new Error("face-api failed to load"));
+        document.head.appendChild(script);
+      })
+        .then(() =>
+          Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri("/static/models"),
+            faceapi.nets.faceLandmark68Net.loadFromUri("/static/models"),
+          ])
+        )
+        .catch((err) => {
+          faceApiPromise = null; // allow a retry on the next upload
+          throw err;
+        });
+    }
+    return faceApiPromise;
+  }
+
+  function landmarkCenter(points) {
+    let x = 0;
+    let y = 0;
+    for (const p of points) {
+      x += p.x;
+      y += p.y;
+    }
+    return { x: x / points.length, y: y / points.length };
+  }
+
+  // Solve zoom/moveX/moveY/rotate so the detected eyes land on the eye guide
+  // and the mouth on the mouth guide. Uses the exact same transform as
+  // update() and the canvas export (cover-fit box, rotation about its center).
+  function snapTransform(image, leftEye, rightEye, mouth) {
+    const natW = image.naturalWidth;
+    const natH = image.naturalHeight;
+    const cs0 = Math.max(baseW / natW, baseH / natH); // cover scale at zoom 1
+
+    const eyeMid = {
+      x: (leftEye.x + rightEye.x) / 2,
+      y: (leftEye.y + rightEye.y) / 2,
+    };
+    const vx = mouth.x - eyeMid.x;
+    const vy = mouth.y - eyeMid.y;
+    const vLen = Math.hypot(vx, vy);
+    if (vLen < 1) return null;
+
+    // Rotate the eye→mouth vector until it points straight down (this also
+    // levels the eye line). SVG rotation is clockwise-positive in y-down coords.
+    const theta = Math.atan2(vx, vy);
+
+    const scale = clamp(
+      GUIDE_GAP / (vLen * cs0),
+      parseFloat(zoom.min),
+      parseFloat(zoom.max)
+    );
+
+    // Photo point → offset from the image box center, pre-rotation, in
+    // panel units (with the solved zoom applied).
+    const fromCenter = (px, py) => ({
+      x: ((baseW - natW * cs0) / 2 + px * cs0 - baseW / 2) * scale,
+      y: ((baseH - natH * cs0) / 2 + py * cs0 - baseH / 2) * scale,
+    });
+
+    const wEye = fromCenter(eyeMid.x, eyeMid.y);
+
+    // R(θ)·wEye (rotation about the box center)
+    const cosT = Math.cos(theta);
+    const sinT = Math.sin(theta);
+    const rx = wEye.x * cosT - wEye.y * sinT;
+    const ry = wEye.x * sinT + wEye.y * cosT;
+
+    // Box top-left so eyeMid lands on (baseW/2, EYE_GUIDE_Y):
+    //   imageX + 56·s = 56 − rx  →  imageX = 56 − 56·s − rx
+    const imageX = baseW / 2 - (baseW / 2) * scale - rx;
+    const imageY = EYE_GUIDE_Y - (baseH / 2) * scale - ry;
+
+    // Convert to slider values (inverse of update()).
+    return {
+      zoom: scale,
+      moveX: clamp(
+        imageX + (baseW * scale - baseW) / 2,
+        parseFloat(moveX.min),
+        parseFloat(moveX.max)
+      ),
+      moveY: clamp(
+        imageY + (baseH * scale - baseH) / 2,
+        parseFloat(moveY.min),
+        parseFloat(moveY.max)
+      ),
+      rotate: (theta * 180) / Math.PI,
+    };
+  }
+
+  async function snapToFace(image) {
+    try {
+      await loadFaceApi();
+      const options = new faceapi.TinyFaceDetectorOptions({
+        inputSize: 416,
+        scoreThreshold: 0.3,
+      });
+      const results = await faceapi
+        .detectAllFaces(image, options)
+        .withFaceLandmarks();
+      if (!results.length) return { found: false };
+
+      // Pick the largest face in the photo.
+      let best = results[0];
+      for (const r of results) {
+        if (r.detection.box.area > best.detection.box.area) best = r;
+      }
+
+      const lm = best.landmarks;
+      const leftEye = landmarkCenter(lm.getLeftEye());
+      const rightEye = landmarkCenter(lm.getRightEye());
+      const mouth = landmarkCenter(lm.getMouth());
+
+      const snapped = snapTransform(image, leftEye, rightEye, mouth);
+      if (!snapped) return { found: false };
+      return { found: true, ...snapped };
+    } catch (err) {
+      console.warn("[face-snap] detection failed:", err);
+      return { found: false, error: err };
+    }
+  }
+
+  // Drag to move. Horizontal drags move the face; on touch devices a
+  // vertical swipe is left to the browser so the page scrolls instead.
+  const DRAG_THRESHOLD = 6; // px — ignore micro-moves so the browser can
+                            // claim vertical pans as scroll without jitter.
+
+  let dragging = false;     // pointer is down (capture held)
+  let dragStarted = false;  // threshold crossed — movement is being applied
   let startClientX = 0;
   let startClientY = 0;
   let startMoveX = 0;
@@ -962,6 +1151,7 @@
 
   faceSvg.addEventListener("pointerdown", (event) => {
     dragging = true;
+    dragStarted = false;
     startClientX = event.clientX;
     startClientY = event.clientY;
     startMoveX = parseFloat(moveX.value);
@@ -969,24 +1159,29 @@
 
     faceSvg.classList.add("dragging");
     faceSvg.setPointerCapture(event.pointerId);
-    event.preventDefault();
   });
 
   faceSvg.addEventListener("pointermove", (event) => {
     if (!dragging) return;
+
+    const dx = event.clientX - startClientX;
+    const dy = event.clientY - startClientY;
+
+    if (!dragStarted && Math.abs(dx) + Math.abs(dy) < DRAG_THRESHOLD) return;
+    dragStarted = true;
 
     const rect = faceSvg.getBoundingClientRect();
     const svgPerPixelX = baseW / rect.width;
     const svgPerPixelY = baseH / rect.height;
 
     moveX.value = clamp(
-      startMoveX + (event.clientX - startClientX) * svgPerPixelX,
+      startMoveX + dx * svgPerPixelX,
       parseFloat(moveX.min),
       parseFloat(moveX.max)
     );
 
     moveY.value = clamp(
-      startMoveY + (event.clientY - startClientY) * svgPerPixelY,
+      startMoveY + dy * svgPerPixelY,
       parseFloat(moveY.min),
       parseFloat(moveY.max)
     );
@@ -998,6 +1193,7 @@
     if (!dragging) return;
 
     dragging = false;
+    dragStarted = false;
     faceSvg.classList.remove("dragging");
 
     if (faceSvg.hasPointerCapture(event.pointerId)) {
@@ -1007,6 +1203,7 @@
 
   faceSvg.addEventListener("pointerup", stopDragging);
   faceSvg.addEventListener("pointercancel", stopDragging);
+  faceSvg.addEventListener("lostpointercapture", stopDragging);
 
   // Scroll over the face to zoom around the cursor
   faceSvg.addEventListener("wheel", (event) => {
@@ -1081,41 +1278,49 @@
       ctx.save();
       ctx.clip(new Path2D(shapePath));
 
-      const x = parseFloat(faceImage.getAttribute("x"));
-      const y = parseFloat(faceImage.getAttribute("y"));
-      const boxW = parseFloat(faceImage.getAttribute("width"));
-      const boxH = parseFloat(faceImage.getAttribute("height"));
-      const rotation = parseFloat(rotate.value);
+      // Drawing can throw a SecurityError for formats the canvas can't
+      // process (e.g. an SVG with external references) — report it as a
+      // friendly error instead of breaking the Generate flow silently.
+      try {
+        const x = parseFloat(faceImage.getAttribute("x"));
+        const y = parseFloat(faceImage.getAttribute("y"));
+        const boxW = parseFloat(faceImage.getAttribute("width"));
+        const boxH = parseFloat(faceImage.getAttribute("height"));
+        const rotation = parseFloat(rotate.value);
 
-      // Match SVG preserveAspectRatio="xMidYMid slice"
-      const coverScale = Math.max(
-        boxW / source.naturalWidth,
-        boxH / source.naturalHeight
-      );
+        // Match SVG preserveAspectRatio="xMidYMid slice"
+        const coverScale = Math.max(
+          boxW / source.naturalWidth,
+          boxH / source.naturalHeight
+        );
 
-      const drawW = source.naturalWidth * coverScale;
-      const drawH = source.naturalHeight * coverScale;
-      const drawX = x + (boxW - drawW) / 2;
-      const drawY = y + (boxH - drawH) / 2;
+        const drawW = source.naturalWidth * coverScale;
+        const drawH = source.naturalHeight * coverScale;
+        const drawX = x + (boxW - drawW) / 2;
+        const drawY = y + (boxH - drawH) / 2;
 
-      // Clip to the SVG image element's own box, then rotate around its center
-      const centerX = x + boxW / 2;
-      const centerY = y + boxH / 2;
+        // Clip to the SVG image element's own box, then rotate around its center
+        const centerX = x + boxW / 2;
+        const centerY = y + boxH / 2;
 
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(x, y, boxW, boxH);
-      ctx.clip();
-      ctx.translate(centerX, centerY);
-      ctx.rotate((rotation * Math.PI) / 180);
-      ctx.drawImage(source, drawX - centerX, drawY - centerY, drawW, drawH);
-      ctx.restore();
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, boxW, boxH);
+        ctx.clip();
+        ctx.translate(centerX, centerY);
+        ctx.rotate((rotation * Math.PI) / 180);
+        ctx.drawImage(source, drawX - centerX, drawY - centerY, drawW, drawH);
+        ctx.restore();
+      } catch (drawError) {
+        onError("That image format can't be processed — please choose a JPG or PNG photo.");
+        return;
+      }
 
       ctx.restore();
 
       canvas.toBlob((blob) => {
         if (!blob) {
-          onError("The PNG could not be created.");
+          onError("The image could not be processed.");
           return;
         }
 
