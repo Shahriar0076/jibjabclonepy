@@ -819,6 +819,8 @@
     <video
       id="landingVideo"
       src="/assets/background/BG.mp4"
+      poster="/static/poster.jpg"
+      preload="metadata"
       loop
       playsinline
       controls
@@ -1108,13 +1110,28 @@
   async function snapToFace(image) {
     try {
       await loadFaceApi();
-      const options = new faceapi.TinyFaceDetectorOptions({
-        inputSize: 416,
-        scoreThreshold: 0.3,
-      });
-      const results = await faceapi
-        .detectAllFaces(image, options)
+      let results = await faceapi
+        .detectAllFaces(
+          image,
+          new faceapi.TinyFaceDetectorOptions({
+            inputSize: 416,
+            scoreThreshold: 0.3,
+          })
+        )
         .withFaceLandmarks();
+
+      if (!results.length) {
+        // Retry once with a more sensitive threshold (small/tilted faces).
+        results = await faceapi
+          .detectAllFaces(
+            image,
+            new faceapi.TinyFaceDetectorOptions({
+              inputSize: 416,
+              scoreThreshold: 0.15,
+            })
+          )
+          .withFaceLandmarks();
+      }
       if (!results.length) return { found: false };
 
       // Pick the largest face in the photo.

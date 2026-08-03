@@ -419,7 +419,12 @@ def result(job_id):
         video_bytes,
         mimetype="video/mp4",
         headers={
-            "Content-Disposition": 'attachment; filename="final.mp4"',
+            # inline (not attachment): the page fetches this and plays it in
+            # the in-page <video>; attachment makes some mobile browsers
+            # grab the file into the download manager instead.
+            # The Download button saves via its own blob URL, so it keeps
+            # working without an attachment header.
+            "Content-Disposition": 'inline; filename="final.mp4"',
             "Cache-Control": "no-store",
         },
     )
