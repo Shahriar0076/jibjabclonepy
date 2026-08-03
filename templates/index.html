@@ -276,7 +276,7 @@
   }
 
   .guide.eye { top: 43.8%; }
-  .guide.mouth { top: 73.7%; }
+  .guide.mouth { top: 76.7%; }
 
   .guide-line {
     position: absolute;
@@ -1000,9 +1000,9 @@
 
   // -------- Auto-snap: detect the uploaded face and align it to the guides --------
   // Guide positions in SVG units of the 112×168 panel — must match the CSS:
-  // .guide.eye { top: 43.8% } → 168·0.438, .guide.mouth { top: 73.7% } → 168·0.737.
+  // .guide.eye { top: 43.8% } → 168·0.438, .guide.mouth { top: 76.7% } → 168·0.767.
   const EYE_GUIDE_Y = 168 * 0.438;
-  const MOUTH_GUIDE_Y = 168 * 0.737;
+  const MOUTH_GUIDE_Y = 168 * 0.767;
   const GUIDE_GAP = MOUTH_GUIDE_Y - EYE_GUIDE_Y;
 
   let faceApiPromise = null;

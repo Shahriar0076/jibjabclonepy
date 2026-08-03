@@ -11,3 +11,6 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Flask dev server log
+server.log
