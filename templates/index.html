@@ -258,6 +258,34 @@
     to { transform: rotate(360deg); }
   }
 
+  /* Hint above the button row: tells users the photo can be dragged in
+     any direction to adjust. It dims away on the first real drag (see
+     the drag handler). */
+  .stage-hint {
+    justify-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, .78);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 800;
+    letter-spacing: .2px;
+    white-space: nowrap;
+    box-shadow: 0 6px 18px rgba(2, 6, 23, .5);
+    backdrop-filter: blur(4px);
+  }
+
+  .stage-hint svg {
+    width: 13px;
+    height: 13px;
+    flex: none;
+    color: var(--primary);
+  }
+
   svg.face-svg {
     width: 100%;
     height: auto;
@@ -1122,7 +1150,7 @@
       <button id="moveXMinus" class="step-btn" type="button" aria-label="Move left">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
       </button>
-      <input id="moveX" type="range" min="-500" max="500" step="1" value="0">
+      <input id="moveX" type="range" min="-1000" max="1000" step="1" value="0">
       <button id="moveXPlus" class="step-btn" type="button" aria-label="Move right">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
       </button>
@@ -1140,7 +1168,7 @@
       <button id="moveYMinus" class="step-btn" type="button" aria-label="Move down">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
       </button>
-      <input id="moveY" type="range" min="-500" max="500" step="1" value="0">
+      <input id="moveY" type="range" min="-1000" max="1000" step="1" value="0">
       <button id="moveYPlus" class="step-btn" type="button" aria-label="Move up">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
       </button>
@@ -1164,6 +1192,13 @@
       </button>
       <output id="rotateValue">0°</output>
     </label>
+
+    <div class="stage-hint" id="stageHint" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 32 32">
+        <path d="M31.762 15.52l-0.265-0.252c-0.005-0.005-0.011-0.007-0.017-0.011l-4.055-3.701c-0.292-0.28-0.764-0.28-1.057 0l-0.172 0.252c-0.292 0.28-0.197 0.732 0.095 1.011l2.39 2.167h-11.605v-11.667l2.167 2.389c0.279 0.292 0.732 0.387 1.011 0.094l0.252-0.171c0.279-0.293 0.279-0.765 0-1.058l-3.537-3.874c-0.086-0.173-0.219-0.317-0.385-0.415l-0.044-0.046c-0.139-0.146-0.323-0.219-0.507-0.218-0.184-0.001-0.368 0.072-0.509 0.218l-0.253 0.264c-0.005 0.005-0.005 0.011-0.011 0.017l-3.61 3.992c-0.279 0.292-0.279 0.764 0 1.057l0.252 0.171c0.279 0.292 0.732 0.197 1.011-0.095l2.161-2.41v11.749h-11.759l2.389-2.167c0.292-0.28 0.387-0.732 0.095-1.011l-0.171-0.252c-0.293-0.28-0.766-0.28-1.058 0l-3.874 3.537c-0.173 0.085-0.317 0.219-0.415 0.384l-0.046 0.044c-0.146 0.139-0.219 0.324-0.218 0.508-0.001 0.184 0.071 0.368 0.218 0.509l0.265 0.253c0.005 0.005 0.011 0.006 0.016 0.011l3.992 3.61c0.292 0.279 0.764 0.279 1.058 0l0.171-0.252c0.292-0.279 0.197-0.733-0.095-1.012l-2.41-2.161h11.844v11.78l-2.161-2.41c-0.28-0.292-0.732-0.387-1.011-0.095l-0.252 0.171c-0.279 0.293-0.279 0.765 0 1.057l3.61 3.992c0.005 0.006 0.006 0.012 0.011 0.017l0.253 0.265c0.141 0.146 0.325 0.219 0.509 0.218 0.183 0.001 0.368-0.072 0.507-0.218l0.253-0.265c0.005-0.005 0.007-0.011 0.012-0.017l3.701-4.055c0.279-0.292 0.279-0.764 0-1.057l-0.252-0.172c-0.279-0.292-0.732-0.197-1.011 0.095l-2.167 2.39v-11.698h11.687l-2.41 2.161c-0.292 0.279-0.387 0.733-0.095 1.012l0.171 0.252c0.293 0.279 0.765 0.279 1.057 0l3.992-3.61c0.006-0.006 0.012-0.006 0.017-0.010l0.265-0.253c0.146-0.14 0.219-0.324 0.218-0.509 0.001-0.183-0.072-0.368-0.218-0.507z"/>
+      </svg>
+      <span>Drag photo left, right, up &amp; down to adjust</span>
+    </div>
 
     <div class="button-row">
       <button id="generateButton" class="generate-button" type="button">
