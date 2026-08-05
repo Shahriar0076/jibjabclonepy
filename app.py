@@ -19,7 +19,7 @@ from flask import Flask, Response, jsonify, render_template, request, send_from_
 from werkzeug.exceptions import RequestEntityTooLarge
 
 import config
-from services import composite, overlay
+from services import RenderCancelled, composite, overlay
 
 # Console logging with timestamps (visible in the terminal running app.py).
 logging.basicConfig(
@@ -34,7 +34,8 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20 MB uploads
 
 # In-memory job registry: job_id -> {status, phase, frame, total, percent,
-# error, final_video}. Jobs survive only as long as the process.
+# error, final_video, cancel_requested}. Jobs survive only as long as the
+# process.
 jobs = {}
 jobs_lock = threading.Lock()
 
@@ -104,6 +105,13 @@ def _update_job(job_id, **fields):
         job.update(fields)
 
 
+def _is_cancelled(job_id):
+    """True when the user has requested this job be cancelled."""
+    with jobs_lock:
+        job = jobs.get(job_id)
+        return bool(job and job.get("cancel_requested"))
+
+
 def _estimate_eta(history, percent):
     """Seconds until the render hits 100%, from a least-squares fit of
     recent (timestamp, percent) points. None when there is not enough
@@ -147,7 +155,7 @@ def _evict_old_jobs_locked():
         if len(jobs) <= MAX_JOBS:
             break
         job = jobs[key]
-        if job["status"] in ("done", "error"):
+        if job["status"] in ("done", "error", "cancelled"):
             final_video = job.get("final_video")
             if final_video:
                 try:
@@ -187,11 +195,22 @@ def _make_progress_callback(job_id, phase, lo, hi, remux_phase="remux",
 
 
 def _run_render(job_id, face_png, bg_preview, final_video):
-    """Background render thread. Never raises — failures go into the job."""
+    """Background render thread. Never raises — failures go into the job.
+
+    A cancel request (POST /api/cancel/<job_id>) sets a flag on the job;
+    it is picked up at frame boundaries (via `should_cancel`), between
+    phases, and inside the ffmpeg remux (which terminates ffmpeg).
+    """
     t0 = time.time()
+
+    def should_cancel():
+        return _is_cancelled(job_id)
 
     try:
         _update_job(job_id, status="rendering")
+
+        if should_cancel():
+            raise RenderCancelled("Render cancelled by user")
 
         log.info("[%s] Phase 2: face over background...", job_id)
         t1 = time.time()
@@ -206,8 +225,12 @@ def _run_render(job_id, face_png, bg_preview, final_video):
                 remux_phase="finalize_bg",
                 remux_target=config.PHASE_3_WEIGHT[0],
             ),
+            should_cancel=should_cancel,
         )
         log.info("[%s] Phase 2 done in %.1fs", job_id, time.time() - t1)
+
+        if should_cancel():
+            raise RenderCancelled("Render cancelled by user")
 
         log.info("[%s] Phase 3: composite + audio...", job_id)
         t2 = time.time()
@@ -220,14 +243,40 @@ def _run_render(job_id, face_png, bg_preview, final_video):
                 job_id, "composite", *config.PHASE_3_WEIGHT,
                 remux_phase="remux", remux_target=100,
             ),
+            should_cancel=should_cancel,
         )
         log.info("[%s] Phase 3 done in %.1fs", job_id, time.time() - t2)
 
-        _update_job(job_id, status="done", phase="done", percent=100)
+        # Terminal flip must be atomic with the cancel check: once status
+        # is "done" the job can no longer be cancelled, so the two can
+        # never race. Direct dict writes — jobs_lock is not reentrant,
+        # so _update_job must not be called while holding it.
+        with jobs_lock:
+            job = jobs.get(job_id)
+            if job is None:
+                return
+            if job.get("cancel_requested"):
+                cancelled = True
+            else:
+                job.update(status="done", phase="done", percent=100)
+                cancelled = False
+
+        if cancelled:
+            raise RenderCancelled("Render cancelled by user")
+
         log.info("[%s] Render complete in %.1fs", job_id, time.time() - t0)
 
         # The result video is kept until /api/result serves it.
         for path in (face_png, bg_preview):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except OSError:
+                pass
+    except RenderCancelled:
+        log.info("[%s] Render cancelled", job_id)
+        _update_job(job_id, status="cancelled", error=None)
+        for path in (face_png, bg_preview, final_video):
             try:
                 if os.path.exists(path):
                     os.remove(path)
@@ -268,6 +317,7 @@ def generate():
         active_renders = sum(
             1 for job in jobs.values()
             if job["status"] in ("starting", "rendering")
+            and not job.get("cancel_requested")
         )
     if active_renders >= MAX_ACTIVE_RENDERS:
         log.warning("POST /generate: rejected (%d active renders)",
@@ -308,6 +358,7 @@ def generate():
         busy = sum(
             1 for job in jobs.values()
             if job["status"] in ("starting", "rendering")
+            and not job.get("cancel_requested")
         ) >= MAX_ACTIVE_RENDERS
 
         if not busy:
@@ -319,6 +370,7 @@ def generate():
                 "percent": 0,
                 "error": None,
                 "final_video": final_video,
+                "cancel_requested": False,
                 "eta_history": [],
             }
             _evict_old_jobs_locked()
@@ -376,6 +428,30 @@ def progress(job_id):
     })
 
 
+@app.route("/api/cancel/<job_id>", methods=["POST"])
+def cancel(job_id):
+    """Request cancellation of a running render.
+
+    Cooperative: sets a flag the render thread checks at frame
+    boundaries (and inside the ffmpeg remux). Returns 409 when the
+    render already finished, so the browser can keep polling for the
+    result instead.
+    """
+    with jobs_lock:
+        job = jobs.get(job_id)
+
+        if job is None:
+            return jsonify({"error": "Unknown job."}), 404
+
+        if job["status"] in ("done", "error", "cancelled"):
+            return jsonify({"error": "Render already finished."}), 409
+
+        job["cancel_requested"] = True
+
+    log.info("[%s] Cancel requested", job_id)
+    return jsonify({"status": "cancelling"}), 200
+
+
 @app.route("/api/result/<job_id>")
 def result(job_id):
     """Return the finished video (409 while rendering, 500 on failure)."""
@@ -390,6 +466,9 @@ def result(job_id):
 
     if status == "rendering" or status == "starting":
         return jsonify({"error": "Still rendering."}), 409
+
+    if status == "cancelled":
+        return jsonify({"error": "Render was cancelled."}), 410
 
     if status == "error":
         return jsonify({"error": job.get("error", "Render failed.")}), 500

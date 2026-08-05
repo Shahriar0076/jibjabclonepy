@@ -3,10 +3,11 @@
 import subprocess
 
 import config
+from services import RenderCancelled
 
 
 def remux_audio(video_path, audio_source, output_path,
-                remux_progress=None, duration=None):
+                remux_progress=None, duration=None, should_cancel=None):
     """Re-encode video from `video_path` and copy audio from `audio_source`.
 
     OpenCV's mp4v writer cannot write AAC audio, so every render goes
@@ -16,6 +17,10 @@ def remux_audio(video_path, audio_source, output_path,
     `remux_progress(frac)` is invoked with 0..1 as ffmpeg progresses
     (parsed live from its `-progress` output, gated by `duration` in
     seconds). It is best-effort: exceptions never abort the remux.
+
+    `should_cancel()` (optional) is checked as ffmpeg reports progress;
+    when it returns True the ffmpeg process is terminated and
+    `RenderCancelled` is raised.
     """
     command = [
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
@@ -44,8 +49,14 @@ def remux_audio(video_path, audio_source, output_path,
 
     try:
         # Read ffmpeg's progress lines as they arrive (out_time_us).
+        cancelled = False
         for line in process.stdout:
             line = line.strip()
+
+            if should_cancel is not None and should_cancel():
+                cancelled = True
+                process.terminate()
+                break
 
             if not line.startswith("out_time_us="):
                 continue
@@ -70,6 +81,9 @@ def remux_audio(video_path, audio_source, output_path,
         process.stderr.close()
 
     returncode = process.wait()
+
+    if cancelled:
+        raise RenderCancelled("Render cancelled by user")
 
     if returncode != 0:
         raise RuntimeError(

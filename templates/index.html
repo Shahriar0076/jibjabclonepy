@@ -148,6 +148,10 @@
     line-height: 1.55;
   }
 
+  .landing-content .landing-tip {
+    font-size: 13.5px;
+  }
+
   .make-video-button {
     display: inline-flex;
     align-items: center;
@@ -189,6 +193,12 @@
   .generate-button svg {
     width: 18px;
     height: 18px;
+    flex: none;
+  }
+
+  .cancel-button svg {
+    width: 15px;
+    height: 15px;
     flex: none;
   }
 
@@ -367,6 +377,139 @@
     font-variant-numeric: tabular-nums;
     color: var(--muted);
     font-weight: 700;
+  }
+
+  /* Face picker (multi-face photos): the generic `label` grid above has
+     five slider columns, so this narrows it to a label + select row. */
+  .face-picker {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* Custom listbox: the native <select> popup is rendered by the OS/browser
+     and can ignore dark-theme CSS (white menu on Safari and older Chrome/
+     Firefox), so the face picker is a button + role="listbox" component
+     styled to match the page in every browser. */
+  .face-select {
+    position: relative;
+    min-width: 0;
+  }
+
+  .face-select__trigger {
+    width: 100%;
+    min-height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: rgba(148, 163, 184, .07);
+    color: var(--text);
+    font: inherit;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color .15s ease;
+  }
+
+  .face-select__trigger:hover {
+    border-color: rgba(255, 255, 255, .18);
+  }
+
+  .face-select__trigger[aria-expanded="true"] {
+    border-color: var(--primary);
+  }
+
+  .face-select__trigger:disabled {
+    opacity: .4;
+    cursor: default;
+  }
+
+  .face-select__value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .face-select__chevron {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    color: var(--muted);
+    transition: transform .15s ease;
+  }
+
+  .face-select__trigger[aria-expanded="true"] .face-select__chevron {
+    transform: rotate(180deg);
+  }
+
+  .face-select__list {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 30;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    max-height: 220px;
+    overflow-y: auto;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 14px 30px rgba(2, 6, 23, .6);
+  }
+
+  .face-select__option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 3px;
+    margin-bottom: 5px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    color: var(--text);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .face-select__option:hover,
+  .face-select__option:focus {
+    background: rgba(148, 163, 184, .14);
+    outline: none;
+  }
+
+  .face-select__option[aria-selected="true"] {
+    background: rgba(236, 72, 153, .18);
+    color: #fff;
+  }
+
+  .face-select__option[aria-selected="true"]::after {
+    content: "";
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin-left: auto;
+    border-radius: 50%;
+    background: var(--primary);
+  }
+
+  .face-select__option[aria-disabled="true"] {
+    color: var(--muted);
+    opacity: .55;
+    cursor: default;
+  }
+
+  .face-select__option[aria-disabled="true"]:hover,
+  .face-select__option[aria-disabled="true"]:focus {
+    background: transparent;
   }
 
   input[type="range"] {
@@ -562,6 +705,78 @@
     }
   }
 
+  .button-row {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  /* Generate alone fills the row; when Cancel is visible the two
+     split it evenly (flex: 1 1 0 + the hidden cancel = full width). */
+  .button-row .generate-button,
+  .button-row .cancel-button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .cancel-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border: 1px solid rgba(148, 163, 184, .35);
+    border-radius: 14px;
+    padding: 13px 18px;
+    min-height: 48px;
+    background: rgba(148, 163, 184, .08);
+    color: var(--muted);
+    font-family: "Fredoka", sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: .3px;
+    cursor: pointer;
+    transition:
+      transform .15s ease,
+      border-color .15s ease,
+      background .15s ease,
+      color .15s ease,
+      opacity .2s ease;
+  }
+
+  .cancel-button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(248, 113, 113, .6);
+    background: rgba(248, 113, 113, .1);
+    color: #f87171;
+  }
+
+  .cancel-button:active {
+    transform: translateY(1px);
+  }
+
+  .cancel-button:disabled {
+    opacity: .5;
+    cursor: default;
+    transform: none;
+  }
+
+  /* All editor controls lock while a render is running. */
+  input[type="range"]:disabled {
+    opacity: .4;
+    cursor: default;
+  }
+
+  /* A disabled attribute can't block pointer/wheel events on the SVG,
+     so the preview (drag + wheel zoom) is locked via pointer-events. */
+  body.controls-locked #faceSvg {
+    pointer-events: none;
+  }
+
+  body.controls-locked .upload-box {
+    pointer-events: none;
+    opacity: .5;
+  }
+
   #downloadButton {
     background: linear-gradient(180deg, var(--accent), var(--accent-dark));
     box-shadow:
@@ -722,8 +937,27 @@
       grid-column: 1 / -1;
     }
 
+    .face-picker {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
     .step-btn {
       height: 34px;
+    }
+
+    /* Tighter padding + slightly smaller type so the two half-width
+       buttons fit phones without wrapping or overflowing. */
+    .button-row {
+      gap: 8px;
+    }
+
+    .button-row .generate-button,
+    .button-row .cancel-button {
+      padding-left: 8px;
+      padding-right: 8px;
+      font-size: 15px;
+      letter-spacing: 0;
+      white-space: nowrap;
     }
   }
 
@@ -753,7 +987,7 @@
     </svg>
     <div>
       <h1>Birthday Clip Studio</h1>
-      <p>Upload a photo, position the face, generate your video</p>
+      <p>Upload a front-facing photo, align your face, and generate.</p>
     </div>
   </header>
 
@@ -836,6 +1070,27 @@
       </svg>
       <span>Choose a photo</span>
     </label>
+    <p class="note">
+      <svg class="note-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 11v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="12" cy="7.5" r="1.4" fill="currentColor"/>
+      </svg>
+      <span>Use a clear, front-facing photo — both eyes and the mouth should be visible for the best fit.</span>
+    </p>
+    <div class="face-picker" id="facePicker" hidden>
+      <span class="label-text">Face</span>
+      <div class="face-select" id="faceSelectWrap">
+        <button type="button" id="faceSelect" class="face-select__trigger"
+                aria-haspopup="listbox" aria-expanded="false"
+                aria-label="Choose which face to use">
+          <span class="face-select__value" id="faceSelectValue"></span>
+          <svg class="face-select__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <ul id="faceSelectList" class="face-select__list" role="listbox"
+            aria-labelledby="faceSelect" hidden></ul>
+      </div>
+    </div>
     <input id="upload" type="file" accept="image/*" hidden>
 
     <label>
@@ -849,7 +1104,7 @@
       <button id="zoomMinus" class="step-btn" type="button" aria-label="Zoom out">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
       </button>
-      <input id="zoom" type="range" min=".1" max="30" step=".01" value="1">
+      <input id="zoom" type="range" min="0" max="1000" step="1" value="404">
       <button id="zoomPlus" class="step-btn" type="button" aria-label="Zoom in">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
       </button>
@@ -867,7 +1122,7 @@
       <button id="moveXMinus" class="step-btn" type="button" aria-label="Move left">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
       </button>
-      <input id="moveX" type="range" min="-3000" max="3000" step="1" value="0">
+      <input id="moveX" type="range" min="-500" max="500" step="1" value="0">
       <button id="moveXPlus" class="step-btn" type="button" aria-label="Move right">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
       </button>
@@ -885,7 +1140,7 @@
       <button id="moveYMinus" class="step-btn" type="button" aria-label="Move down">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
       </button>
-      <input id="moveY" type="range" min="-3000" max="3000" step="1" value="0">
+      <input id="moveY" type="range" min="-500" max="500" step="1" value="0">
       <button id="moveYPlus" class="step-btn" type="button" aria-label="Move up">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
       </button>
@@ -910,13 +1165,23 @@
       <output id="rotateValue">0°</output>
     </label>
 
-    <button id="generateButton" class="generate-button" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <rect x="2" y="6" width="13" height="12" rx="2"/>
-        <path d="M15 11l7-4v10l-7-4"/>
-      </svg>
-      Generate Video
-    </button>
+    <div class="button-row">
+      <button id="generateButton" class="generate-button" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2" y="6" width="13" height="12" rx="2"/>
+          <path d="M15 11l7-4v10l-7-4"/>
+        </svg>
+        Generate Video
+      </button>
+
+      <button id="cancelButton" class="cancel-button" type="button" hidden>
+        <svg viewBox="0 0 27.963 27.963" fill="currentColor" aria-hidden="true">
+          <path d="M13.981,0.001C6.258,0.001,0,6.259,0,13.981c0,7.724,6.258,13.982,13.981,13.982c7.722,0,13.982-6.259,13.982-13.982C27.963,6.259,21.703,0.001,13.981,0.001z M13.981,26.534c-6.933,0-12.552-5.622-12.552-12.553c0-6.932,5.619-12.55,12.552-12.55c6.931,0,12.552,5.618,12.552,12.55C26.533,20.911,20.912,26.534,13.981,26.534z"/>
+          <path d="M19.992,10.198l-2.228-2.227c0,0-3.552,3.783-3.783,3.783c-0.232,0-3.785-3.783-3.785-3.783l-2.227,2.228c0,0,3.783,3.473,3.783,3.787c0,0.311-3.783,3.784-3.783,3.784l2.227,2.224c0,0,3.524-3.782,3.785-3.782s3.783,3.782,3.783,3.782l2.229-2.224c0,0-3.785-3.531-3.785-3.784C16.207,13.725,19.992,10.198,19.992,10.198z"/>
+        </svg>
+        <span id="cancelLabel">Cancel</span>
+      </button>
+    </div>
 
     <p class="note">
       <svg class="note-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -924,7 +1189,7 @@
         <path d="M12 11v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         <circle cx="12" cy="7.5" r="1.4" fill="currentColor"/>
       </svg>
-      <span>Upload a photo, adjust the face, then click Generate Video.</span>
+      <span>Upload a front-facing photo, align your face, and generate.</span>
     </p>
 
     <p id="status" hidden></p>
@@ -985,6 +1250,7 @@
     </svg>
     <h2>Epic Birthday!</h2>
     <p>Lights, Camera, Action... Here's your ticket to the most action-packed, epic 80's birthday ever!</p>
+    <p class="landing-tip">Tip: use a clear, front-facing photo for the best result.</p>
     <button id="makeVideoButton" class="make-video-button" type="button">
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M8 5v14l11-7z"/>
@@ -998,31 +1264,86 @@
   const faceSvg = document.getElementById("faceSvg");
   const faceImage = document.getElementById("faceImage");
   const faceOvalHit = document.getElementById("faceOvalHit");
+  const facePanel = document.querySelector(".panel");
   const upload = document.getElementById("upload");
   const zoom = document.getElementById("zoom");
   const moveX = document.getElementById("moveX");
   const moveY = document.getElementById("moveY");
   const rotate = document.getElementById("rotate");
   const generateButton = document.getElementById("generateButton");
+  const cancelButton = document.getElementById("cancelButton");
+  const cancelLabel = document.getElementById("cancelLabel");
 
   const zoomValue = document.getElementById("zoomValue");
   const moveXValue = document.getElementById("moveXValue");
   const moveYValue = document.getElementById("moveYValue");
   const rotateValue = document.getElementById("rotateValue");
 
+  const facePicker = document.getElementById("facePicker");
+  const faceSelect = document.getElementById("faceSelect");
+  const faceSelectWrap = document.getElementById("faceSelectWrap");
+  const faceSelectList = document.getElementById("faceSelectList");
+  const faceSelectValue = document.getElementById("faceSelectValue");
+
   const baseW = 112;
   const baseH = 168;
   const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // reject > 25 MB before reading
+
+  // State for the multi-face picker: the photo + detected faces of the
+  // current upload, and a token that discards stale async results when a
+  // newer upload starts before detection finishes.
+  let currentProbe = null;
+  let detectedFaces = [];
+  let uploadToken = 0;
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
   }
 
+  // -------- Zoom slider: logarithmic (perceptual) mapping --------
+  // The native range input is linear, so the raw slider value is a log
+  // index 0..1000; the real scale is ZOOM_MIN..ZOOM_MAX (0.1..30). Every
+  // read/write of zoom.value goes through these two converters: update(),
+  // snapTransform(), applySnap(), the wheel handler, the step buttons,
+  // the zoom slider input handler, and the upload reset. The canvas export
+  // is unaffected (it reads the SVG width/height/x/y attributes set by update()).
+  const ZOOM_MIN = 0.1;
+  const ZOOM_MAX = 30;
+  const ZOOM_INDEX_MAX = 1000;
+
+  function zoomFromSlider(index) {
+    return ZOOM_MIN * Math.pow(ZOOM_MAX / ZOOM_MIN, index / ZOOM_INDEX_MAX);
+  }
+
+  function zoomToSlider(scale) {
+    const index =
+      (Math.log(scale / ZOOM_MIN) / Math.log(ZOOM_MAX / ZOOM_MIN)) *
+      ZOOM_INDEX_MAX;
+    return clamp(index, 0, ZOOM_INDEX_MAX);
+  }
+
+  // -------- Transform state & panel-anchored zoom/rotation --------
+  // prevState is the AUTHORITATIVE float transform: scale is the real zoom,
+  // rotation is in degrees, and moveX/moveY are the slider units, where the
+  // image-box center sits at (moveX + baseW/2, moveY + baseH/2) (update()
+  // renders imageX = moveX − (imageW − baseW)/2). The sliders are
+  // input/output views with step=1 (integer) — the browser quantizes any
+  // programmatic assignment to the nearest step, so storing state in the
+  // sliders would accumulate rounding drift on every zoom/rotate step.
+  // update() renders from prevState and mirrors rounded values into the
+  // sliders.
+  let prevState = {
+    scale: zoomFromSlider(parseFloat(zoom.value)),
+    moveX: parseFloat(moveX.value),
+    moveY: parseFloat(moveY.value),
+    rotation: parseFloat(rotate.value),
+  };
+
   function update() {
-    const scale = parseFloat(zoom.value);
-    const x = parseFloat(moveX.value);
-    const y = parseFloat(moveY.value);
-    const rotation = parseFloat(rotate.value);
+    const scale = prevState.scale;
+    const x = prevState.moveX;
+    const y = prevState.moveY;
+    const rotation = prevState.rotation;
 
     const imageW = baseW * scale;
     const imageH = baseH * scale;
@@ -1038,6 +1359,14 @@
       "rotate(" + rotation + " " + (imageX + imageW / 2) + " " + (imageY + imageH / 2) + ")"
     );
 
+    // Mirror the state into the controls (rounded — the sliders are step=1
+    // views). Writes are identity while the user drags, so the thumb never
+    // jumps.
+    zoom.value = String(Math.round(zoomToSlider(scale)));
+    moveX.value = String(Math.round(x));
+    moveY.value = String(Math.round(y));
+    rotate.value = String(Math.round(rotation));
+
     zoomValue.value = scale.toFixed(2);
     moveXValue.value = Math.round(x);
     moveYValue.value = Math.round(y);
@@ -1046,13 +1375,258 @@
     syncStepButtons();
   }
 
-  [zoom, moveX, moveY, rotate].forEach((control) => {
-    control.addEventListener("input", update);
+  // The zoom/rotate anchor is the middle of the face panel (.panel), mapped
+  // into viewBox coordinates. Measuring it from the live DOM rects (rather
+  // than assuming baseW/2, baseH/2) keeps the anchor on the true panel
+  // center under any CSS sizing or letterboxing of the SVG inside it.
+  function panelAnchor() {
+    const panelRect = facePanel.getBoundingClientRect();
+    const svgRect = faceSvg.getBoundingClientRect();
+    if (
+      panelRect.width <= 0 || panelRect.height <= 0 ||
+      svgRect.width <= 0 || svgRect.height <= 0
+    ) {
+      return { x: baseW / 2, y: baseH / 2 }; // editor hidden — safe fallback
+    }
+    return {
+      x: ((panelRect.left + panelRect.width / 2) - svgRect.left) * (baseW / svgRect.width),
+      y: ((panelRect.top + panelRect.height / 2) - svgRect.top) * (baseH / svgRect.height),
+    };
+  }
+
+  // Zoom/rotation helpers: re-solve moveX/moveY (in the FLOAT state) so the
+  // image-space point currently under the anchor (panel center for sliders
+  // and step buttons, cursor for wheel zoom) stays put. Both derive from the
+  // CURRENT pan/zoom/rotation state only, never from the original image.
+  // The box center is C = (moveX + baseW/2, moveY + baseH/2); the anchor
+  // math runs on C and the result is converted back to moveX/moveY.
+  //   zoom:   C' = A + (s'/s)·(C − A)    (rotation-invariant)
+  //   rotate: C' = A + R_Δ(C − A)        (same handedness as SVG rotate)
+  function zoomAbout(anchorX, anchorY, oldScale, newScale) {
+    const k = newScale / oldScale;
+    const cx = prevState.moveX + baseW / 2;
+    const cy = prevState.moveY + baseH / 2;
+    prevState.moveX = clamp(
+      anchorX + k * (cx - anchorX) - baseW / 2,
+      parseFloat(moveX.min),
+      parseFloat(moveX.max)
+    );
+    prevState.moveY = clamp(
+      anchorY + k * (cy - anchorY) - baseH / 2,
+      parseFloat(moveY.min),
+      parseFloat(moveY.max)
+    );
+    prevState.scale = newScale;
+  }
+
+  function rotateAbout(anchorX, anchorY, deltaDeg) {
+    const cx = prevState.moveX + baseW / 2;
+    const cy = prevState.moveY + baseH / 2;
+    const dx = cx - anchorX;
+    const dy = cy - anchorY;
+    const rad = (deltaDeg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    prevState.moveX = clamp(
+      anchorX + dx * cos - dy * sin - baseW / 2,
+      parseFloat(moveX.min),
+      parseFloat(moveX.max)
+    );
+    prevState.moveY = clamp(
+      anchorY + dx * sin + dy * cos - baseH / 2,
+      parseFloat(moveY.min),
+      parseFloat(moveY.max)
+    );
+    prevState.rotation = clamp(
+      prevState.rotation + deltaDeg,
+      parseFloat(rotate.min),
+      parseFloat(rotate.max)
+    );
+  }
+
+  // Zoom/rotate anchor to the middle of the face panel: adjust the
+  // translation so the image point under the panel center stays fixed while
+  // the control moves.
+  zoom.addEventListener("input", () => {
+    const anchor = panelAnchor();
+    zoomAbout(
+      anchor.x,
+      anchor.y,
+      prevState.scale,
+      zoomFromSlider(parseFloat(zoom.value))
+    );
+    update();
+  });
+
+  rotate.addEventListener("input", () => {
+    const anchor = panelAnchor();
+    rotateAbout(
+      anchor.x,
+      anchor.y,
+      parseFloat(rotate.value) - prevState.rotation
+    );
+    update();
+  });
+
+  [moveX, moveY].forEach((control) => {
+    control.addEventListener("input", () => {
+      if (control === moveX) {
+        prevState.moveX = parseFloat(control.value);
+      } else {
+        prevState.moveY = parseFloat(control.value);
+      }
+      update();
+    });
+  });
+
+  // -------- Face picker: custom listbox --------
+  // Native <select> popups are rendered by the OS/browser and can ignore
+  // dark-theme CSS (white menu on Safari and older Chrome/Firefox), so the
+  // picker is a button + role="listbox" component. It keeps the same
+  // `change` contract: selecting an option sets faceSelect.selectedIndex and
+  // dispatches "change", so the handler below needs no special casing.
+  function setFaceOptions(labels) {
+    faceSelectList.innerHTML = "";
+    faceSelect.selectedIndex = -1;
+    faceSelectValue.textContent = "";
+    labels.forEach((label, index) => {
+      const text = typeof label === "object" ? label.text : label;
+      const disabled = typeof label === "object" && label.disabled;
+      const li = document.createElement("li");
+      li.id = "face-opt-" + index;
+      li.className = "face-select__option";
+      li.setAttribute("role", "option");
+      li.textContent = text;
+      li.tabIndex = -1;
+      if (disabled) li.setAttribute("aria-disabled", "true");
+      li.addEventListener("click", () => {
+        if (li.hasAttribute("aria-disabled")) return;
+        selectFaceOption(index);
+      });
+      faceSelectList.appendChild(li);
+    });
+  }
+
+  function setFaceSelection(index, dispatch) {
+    const options = faceSelectList.querySelectorAll('[role="option"]');
+    if (index < 0 || index >= options.length) return;
+    if (options[index].hasAttribute("aria-disabled")) return;
+    faceSelect.selectedIndex = index;
+    faceSelectValue.textContent = options[index].textContent;
+    options.forEach((o) => {
+      if (o === options[index]) o.setAttribute("aria-selected", "true");
+      else o.removeAttribute("aria-selected");
+    });
+    if (dispatch) faceSelect.dispatchEvent(new Event("change"));
+  }
+
+  function selectFaceOption(index) {
+    setFaceSelection(index, true);
+    closeFaceList(true);
+  }
+
+  function closeFaceList(returnFocus) {
+    if (faceSelectList.hidden) return;
+    faceSelectList.hidden = true;
+    faceSelect.setAttribute("aria-expanded", "false");
+    document.removeEventListener("pointerdown", onFaceListOutside);
+    document.removeEventListener("keydown", onFaceListKeydown, true);
+    if (returnFocus) faceSelect.focus({ preventScroll: true });
+  }
+
+  function openFaceList(focusLast) {
+    if (faceSelect.disabled || !faceSelectList.hidden) return;
+    const options = [...faceSelectList.querySelectorAll('[role="option"]')];
+    const enabled = options.filter((o) => !o.hasAttribute("aria-disabled"));
+    if (!enabled.length) return;
+    faceSelectList.hidden = false;
+    faceSelect.setAttribute("aria-expanded", "true");
+    let target = focusLast
+      ? enabled[enabled.length - 1]
+      : faceSelectList.querySelector('[aria-selected="true"]');
+    if (!target || target.hasAttribute("aria-disabled") || !enabled.includes(target)) {
+      target = enabled[0];
+    }
+    target.focus({ preventScroll: true });
+    // Synchronous add is safe: the opening click's pointerdown already fired.
+    document.addEventListener("pointerdown", onFaceListOutside);
+    document.addEventListener("keydown", onFaceListKeydown, true);
+  }
+
+  function onFaceListOutside(e) {
+    if (!faceSelectWrap.contains(e.target)) {
+      closeFaceList(false);
+    }
+  }
+
+  function onFaceListKeydown(e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFaceList(true);
+      return;
+    }
+    if (e.key === "Tab") {
+      closeFaceList(false);
+      return; // let the browser move focus onward
+    }
+    const options = [...faceSelectList.querySelectorAll('[role="option"]')];
+    const enabled = options.filter((o) => !o.hasAttribute("aria-disabled"));
+    if (!enabled.length) return;
+    let next = null;
+    if (e.key === "ArrowDown") {
+      const i = enabled.indexOf(document.activeElement);
+      next = enabled[(i + 1) % enabled.length];
+    } else if (e.key === "ArrowUp") {
+      const i = enabled.indexOf(document.activeElement);
+      next = enabled[(i - 1 + enabled.length) % enabled.length];
+    } else if (e.key === "Home") {
+      next = enabled[0];
+    } else if (e.key === "End") {
+      next = enabled[enabled.length - 1];
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      const i = options.indexOf(document.activeElement);
+      if (i >= 0) selectFaceOption(i);
+      return;
+    } else {
+      return;
+    }
+    e.preventDefault();
+    next.focus({ preventScroll: true });
+  }
+
+  faceSelect.addEventListener("click", () => {
+    if (faceSelect.disabled) return;
+    if (faceSelect.getAttribute("aria-expanded") === "true") {
+      closeFaceList(true);
+    } else {
+      openFaceList(false);
+    }
+  });
+
+  faceSelect.addEventListener("keydown", (e) => {
+    if (faceSelect.disabled || faceSelectList.hidden === false) return;
+    if (["ArrowDown", "ArrowUp", "Home", "End", "Enter", " "].includes(e.key)) {
+      e.preventDefault();
+      openFaceList(e.key === "ArrowUp" || e.key === "End");
+    }
+  });
+
+  // Re-snap to the chosen face. Wired once here, not per upload, so repeated
+  // uploads never stack duplicate change handlers.
+  faceSelect.addEventListener("change", () => {
+    const index = faceSelect.selectedIndex;
+    if (!currentProbe || index < 0 || index >= detectedFaces.length) return;
+    applySnap(currentProbe, detectedFaces[index]);
   });
 
   // -------- Step buttons: − / + nudge each slider, hold to repeat --------
   // Per-control nudge size (a single press; the slider itself stays fine-tuned).
-  const STEP_BY_CONTROL = { zoom: 0.05, moveX: 10, moveY: 10, rotate: 1 };
+  // Zoom is special: it nudges multiplicatively by ZOOM_STEP_FACTOR (±5%)
+  // to match the logarithmic slider feel at every scale.
+  const STEP_BY_CONTROL = { moveX: 10, moveY: 10, rotate: 1 };
+  const ZOOM_STEP_FACTOR = 1.05;
 
   const stepButtons = [
     { button: document.getElementById("zoomMinus"), input: zoom, delta: -1 },
@@ -1067,12 +1641,17 @@
 
   function syncStepButtons() {
     stepButtons.forEach(({ button, input, delta }) => {
-      const min = parseFloat(input.min);
-      const max = parseFloat(input.max);
-      const step = STEP_BY_CONTROL[input.id];
-      const value = parseFloat(input.value);
-      button.disabled =
-        delta < 0 ? value <= min + step / 2 : value >= max - step / 2;
+      if (input.id === "zoom") {
+        const scale = zoomFromSlider(parseFloat(input.value));
+        button.disabled = delta < 0 ? scale <= ZOOM_MIN : scale >= ZOOM_MAX;
+      } else {
+        const min = parseFloat(input.min);
+        const max = parseFloat(input.max);
+        const step = STEP_BY_CONTROL[input.id];
+        const value = parseFloat(input.value);
+        button.disabled =
+          delta < 0 ? value <= min + step / 2 : value >= max - step / 2;
+      }
       if (button.disabled) {
         // No hover/press feedback on a disabled button.
         button.classList.remove("is-hover", "is-press");
@@ -1095,9 +1674,30 @@
       if (button.disabled) return;
       const min = parseFloat(input.min);
       const max = parseFloat(input.max);
-      const step = STEP_BY_CONTROL[input.id];
-      const next = clamp(parseFloat(input.value) + delta * step, min, max);
-      input.value = next;
+      let next;
+      if (input.id === "zoom") {
+        const scale = prevState.scale;
+        next = Math.round(
+          zoomToSlider(clamp(scale * Math.pow(ZOOM_STEP_FACTOR, delta), ZOOM_MIN, ZOOM_MAX))
+        );
+        // Anchor to the panel center, operating on the float state so no
+        // slider quantization creeps in (update() syncs the controls).
+        const anchor = panelAnchor();
+        zoomAbout(anchor.x, anchor.y, scale, zoomFromSlider(next));
+      } else if (input.id === "rotate") {
+        const anchor = panelAnchor();
+        rotateAbout(anchor.x, anchor.y, delta * STEP_BY_CONTROL.rotate);
+        next = Math.round(prevState.rotation);
+      } else {
+        const step = STEP_BY_CONTROL[input.id];
+        const value = input.id === "moveX" ? prevState.moveX : prevState.moveY;
+        next = clamp(value + delta * step, min, max);
+        if (input.id === "moveX") {
+          prevState.moveX = next;
+        } else {
+          prevState.moveY = next;
+        }
+      }
       update();
       if (next <= min || next >= max) stopRepeat(); // hit an edge
     }
@@ -1153,6 +1753,18 @@
     // iOS Safari can leave odd focus/scroll state after the photo picker closes.
     upload.blur();
 
+    // A new upload invalidates any in-flight detection from the previous
+    // one and hides the face picker; it reappears only if this photo has
+    // two or more faces.
+    uploadToken++;
+    // Handler-scoped stamp: every async callback of this upload (read,
+    // decode, detection) checks it, so a slower earlier upload can never
+    // clobber a newer upload's photo, sliders, or face-picker state.
+    const uploadStamp = uploadToken;
+    facePicker.hidden = true;
+    closeFaceList(false);
+    setFaceOptions([]);
+
     const loader = document.getElementById("stageLoader");
 
     function uploadError(message) {
@@ -1197,37 +1809,52 @@
     const reader = new FileReader();
 
     reader.onload = () => {
+      if (uploadStamp !== uploadToken) return; // superseded by a newer upload
       faceImage.setAttribute("href", reader.result);
 
       // Wait for the photo to decode before touching the sliders or hiding
       // the loader. If it can't be decoded, restore the previous photo.
       const probe = new Image();
       probe.onload = () => {
-        zoom.value = "1";
-        moveX.value = "0";
-        moveY.value = "0";
-        rotate.value = "0";
+        if (uploadStamp !== uploadToken) return; // superseded by a newer upload
+        prevState.scale = 1;
+        prevState.moveX = 0;
+        prevState.moveY = 0;
+        prevState.rotation = 0;
         update();
 
-        // Auto-snap: detect the face and align it to the guide lines.
+        // Auto-snap: detect the face(s) and align the chosen one to the
+        // guide lines. With several faces, show the picker — the largest
+        // face is pre-selected (same default as before).
         const loaderText = loader.querySelector("span");
         if (loaderText) loaderText.textContent = "Aligning your photo…";
-        snapToFace(probe).then((snapped) => {
+        const token = uploadStamp;
+        detectFaces(probe).then((faces) => {
+          // A newer upload owns the stage now — discard this result.
+          if (token !== uploadToken) return;
           if (loaderText) loaderText.textContent = "Preparing your photo…";
           loader.hidden = true;
-          if (snapped.found) {
-            zoom.value = snapped.zoom.toFixed(2);
-            moveX.value = Math.round(snapped.moveX);
-            moveY.value = Math.round(snapped.moveY);
-            rotate.value = Math.round(snapped.rotate);
-            update();
-          } else if (!snapped.error) {
+          if (faces === null) return; // detection infra failed; keep default position
+          if (!faces.length) {
+            uploadError("No face detected — please position the photo manually.");
+            return;
+          }
+          currentProbe = probe;
+          detectedFaces = faces;
+          if (faces.length > 1) {
+            setFaceOptions(faces.map((_, index) => "Face " + (index + 1)));
+            setFaceSelection(0, false);
+            facePicker.hidden = false;
+          } else {
+            facePicker.hidden = true;
+          }
+          if (!applySnap(probe, faces[0])) {
             uploadError("No face detected — please position the photo manually.");
           }
-          // snapped.error → detection infra failed; keep default position.
         });
       };
       probe.onerror = () => {
+        if (uploadStamp !== uploadToken) return; // superseded by a newer upload
         loader.hidden = true;
         faceImage.setAttribute("href", previousHref);
         upload.value = "";
@@ -1237,6 +1864,7 @@
     };
 
     reader.onerror = () => {
+      if (uploadStamp !== uploadToken) return; // superseded by a newer upload
       loader.hidden = true;
       upload.value = "";
       uploadError("Couldn't read that file — please try again.");
@@ -1311,8 +1939,8 @@
 
     const scale = clamp(
       GUIDE_GAP / (vLen * cs0),
-      parseFloat(zoom.min),
-      parseFloat(zoom.max)
+      ZOOM_MIN,
+      ZOOM_MAX
     );
 
     // Photo point → offset from the image box center, pre-rotation, in
@@ -1335,7 +1963,8 @@
     const imageX = baseW / 2 - (baseW / 2) * scale - rx;
     const imageY = EYE_GUIDE_Y - (baseH / 2) * scale - ry;
 
-    // Convert to slider values (inverse of update()).
+    // moveX/moveY/rotate are slider values; zoom is the REAL scale
+    // (applySnap converts it through zoomToSlider).
     return {
       zoom: scale,
       moveX: clamp(
@@ -1352,7 +1981,12 @@
     };
   }
 
-  async function snapToFace(image) {
+  // Detect all faces in the photo, sorted by size (largest first — the
+  // largest face stays the default selection, matching the old behavior).
+  // Returns null if the detection infrastructure failed (caller keeps the
+  // default position), an empty array when no faces were found, or the
+  // sorted detections.
+  async function detectFaces(image) {
     try {
       await loadFaceApi();
       let results = await faceapi
@@ -1377,26 +2011,30 @@
           )
           .withFaceLandmarks();
       }
-      if (!results.length) return { found: false };
-
-      // Pick the largest face in the photo.
-      let best = results[0];
-      for (const r of results) {
-        if (r.detection.box.area > best.detection.box.area) best = r;
-      }
-
-      const lm = best.landmarks;
-      const leftEye = landmarkCenter(lm.getLeftEye());
-      const rightEye = landmarkCenter(lm.getRightEye());
-      const mouth = landmarkCenter(lm.getMouth());
-
-      const snapped = snapTransform(image, leftEye, rightEye, mouth);
-      if (!snapped) return { found: false };
-      return { found: true, ...snapped };
+      results.sort((a, b) => b.detection.box.area - a.detection.box.area);
+      return results;
     } catch (err) {
       console.warn("[face-snap] detection failed:", err);
-      return { found: false, error: err };
+      return null;
     }
+  }
+
+  // Solve zoom/moveX/moveY/rotate for one detection and apply it to the
+  // sliders. Returns true on success, false if the face can't be aligned.
+  function applySnap(image, detection) {
+    const lm = detection.landmarks;
+    const leftEye = landmarkCenter(lm.getLeftEye());
+    const rightEye = landmarkCenter(lm.getRightEye());
+    const mouth = landmarkCenter(lm.getMouth());
+
+    const snapped = snapTransform(image, leftEye, rightEye, mouth);
+    if (!snapped) return false;
+    prevState.scale = snapped.zoom;
+    prevState.moveX = snapped.moveX;
+    prevState.moveY = snapped.moveY;
+    prevState.rotation = Math.round(snapped.rotate);
+    update();
+    return true;
   }
 
   // Drag to move the face. Only touches that begin INSIDE the face oval
@@ -1423,8 +2061,8 @@
     dragStarted = false;
     startClientX = event.clientX;
     startClientY = event.clientY;
-    startMoveX = parseFloat(moveX.value);
-    startMoveY = parseFloat(moveY.value);
+    startMoveX = prevState.moveX;
+    startMoveY = prevState.moveY;
 
     faceSvg.classList.add("dragging");
     faceSvg.setPointerCapture(event.pointerId);
@@ -1443,13 +2081,13 @@
     const svgPerPixelX = baseW / rect.width;
     const svgPerPixelY = baseH / rect.height;
 
-    moveX.value = clamp(
+    prevState.moveX = clamp(
       startMoveX + dx * svgPerPixelX,
       parseFloat(moveX.min),
       parseFloat(moveX.max)
     );
 
-    moveY.value = clamp(
+    prevState.moveY = clamp(
       startMoveY + dy * svgPerPixelY,
       parseFloat(moveY.min),
       parseFloat(moveY.max)
@@ -1482,39 +2120,19 @@
     const cursorX = ((event.clientX - rect.left) / rect.width) * baseW;
     const cursorY = ((event.clientY - rect.top) / rect.height) * baseH;
 
-    const oldZoom = parseFloat(zoom.value);
+    const oldZoom = prevState.scale;
     const newZoom = clamp(
       oldZoom * (event.deltaY < 0 ? 1.12 : 0.88),
-      parseFloat(zoom.min),
-      parseFloat(zoom.max)
+      ZOOM_MIN,
+      ZOOM_MAX
     );
 
     if (Math.abs(newZoom - oldZoom) < 0.0001) return;
 
-    const oldW = baseW * oldZoom;
-    const oldH = baseH * oldZoom;
-    const oldX = parseFloat(faceImage.getAttribute("x"));
-    const oldY = parseFloat(faceImage.getAttribute("y"));
-
-    const imagePointX = (cursorX - oldX) / oldW;
-    const imagePointY = (cursorY - oldY) / oldH;
-
-    const newW = baseW * newZoom;
-    const newH = baseH * newZoom;
-    const newX = cursorX - imagePointX * newW;
-    const newY = cursorY - imagePointY * newH;
-
-    zoom.value = newZoom.toFixed(2);
-    moveX.value = clamp(
-      newX + (newW - baseW) / 2,
-      parseFloat(moveX.min),
-      parseFloat(moveX.max)
-    );
-    moveY.value = clamp(
-      newY + (newH - baseH) / 2,
-      parseFloat(moveY.min),
-      parseFloat(moveY.max)
-    );
+    // Anchor zoom to the cursor, operating on the float state (rotation-
+    // invariant, so wheel zoom stays correct even when the face is rotated).
+    // update() syncs the zoom slider to the rounded index.
+    zoomAbout(cursorX, cursorY, oldZoom, newZoom);
 
     update();
   }, { passive: false });
@@ -1625,12 +2243,42 @@
 
   let resultUrl = null;
   let pollTimer = null;
+  let currentJobId = null;
 
   function stopPolling() {
     if (pollTimer) {
       clearInterval(pollTimer);
       pollTimer = null;
     }
+  }
+
+  // Lock/unlock every editor control while a render is running: the
+  // sliders, step buttons, re-upload, and drag/wheel on the preview SVG
+  // (a disabled attribute cannot stop pointer/wheel events, so the SVG
+  // and upload box are additionally blocked via the controls-locked
+  // class + pointer-events CSS).
+  function setControlsDisabled(disabled) {
+    document.querySelectorAll(".controls input, .controls .step-btn, .controls .face-select__trigger").forEach((el) => {
+      el.disabled = disabled;
+    });
+    if (disabled) closeFaceList(false);
+    document.body.classList.toggle("controls-locked", disabled);
+  }
+
+  // Shared reset for a cancelled render (either the user clicked Cancel
+  // or the server reported status "cancelled").
+  function cancelRender(message) {
+    stopPolling();
+    currentJobId = null;
+    generateButton.disabled = false;
+    setControlsDisabled(false);
+    progressWrap.hidden = true;
+    cancelButton.hidden = true;
+    cancelButton.disabled = false;
+    cancelLabel.textContent = "Cancel";
+    status.hidden = false;
+    status.classList.remove("error");
+    status.textContent = message;
   }
 
   function setProgress(percent, label, indeterminate) {
@@ -1654,8 +2302,13 @@
 
   function failRender(message) {
     stopPolling();
+    currentJobId = null;
     generateButton.disabled = false;
+    setControlsDisabled(false);
     progressWrap.hidden = true;
+    cancelButton.hidden = true;
+    cancelButton.disabled = false;
+    cancelLabel.textContent = "Cancel";
     status.hidden = false;
     status.textContent = "Something went wrong: " + message;
     console.error("[face-guide] render failed:", message);
@@ -1779,8 +2432,13 @@
       })
       .then((videoBlob) => {
         stopPolling();
+        currentJobId = null;
         generateButton.disabled = false;
+        setControlsDisabled(false);
         progressWrap.hidden = true;
+        cancelButton.hidden = true;
+        cancelButton.disabled = false;
+        cancelLabel.textContent = "Cancel";
         showVideo(videoBlob);
       })
       .catch((error) => failRender(error.message));
@@ -1801,8 +2459,18 @@
           return response.json();
         })
         .then((job) => {
+          // Ignore responses from a previous/cancelled render: a fetch
+          // already in flight when the user cancelled can resolve after
+          // a new render has started.
+          if (jobId !== currentJobId) {
+            return;
+          }
           if (job.status === "error") {
             throw new Error(job.error || "Render failed.");
+          }
+          if (job.status === "cancelled") {
+            cancelRender("Video generation cancelled.");
+            return;
           }
           if (job.status === "done") {
             setProgress(100, "Your video is ready!", false);
@@ -1818,7 +2486,12 @@
             job.phase === "remux"
           );
         })
-        .catch((error) => failRender(error.message));
+        .catch((error) => {
+          if (jobId !== currentJobId) {
+            return; // stale response from a previous render
+          }
+          failRender(error.message);
+        });
     }, POLL_INTERVAL_MS);
   }
 
@@ -1827,12 +2500,19 @@
     // gesture — this is what lets the finished video autoplay with sound.
     primeAutoplay();
 
+    // Lock the editor immediately: a double-click would otherwise fire
+    // two renders, and the sliders must not move once the export starts.
+    generateButton.disabled = true;
+    setControlsDisabled(true);
+    cancelButton.hidden = false;
+    cancelButton.disabled = true;
+
     getFacePngBlob((blob) => {
       const formData = new FormData();
       formData.append("face", blob, "face.png");
 
-      generateButton.disabled = true;
       status.hidden = true;
+      status.classList.remove("error");
       progressWrap.hidden = false;
       setProgress(0, "Preparing your video…", false);
 
@@ -1863,12 +2543,54 @@
         })
         .then((data) => {
           console.log("[face-guide] job:", data.job_id);
+          currentJobId = data.job_id;
+          cancelButton.disabled = false; // the job is now cancellable
           pollProgress(data.job_id);
         })
         .catch((error) => failRender(error.message));
     }, (message) => {
       alert(message);
+      generateButton.disabled = false;
+      setControlsDisabled(false);
+      cancelButton.hidden = true;
     });
+  });
+
+  cancelButton.addEventListener("click", () => {
+    if (!currentJobId) return;
+
+    cancelButton.disabled = true;
+    cancelLabel.textContent = "Cancelling…";
+
+    fetch("/api/cancel/" + currentJobId, { method: "POST" })
+      .then((response) => {
+        if (response.status === 409) {
+          // The render finished between polls — keep polling; the next
+          // tick will fetch the result (or surface a render error).
+          return;
+        }
+        if (!response.ok) {
+          return response.text().then((text) => {
+            let message = "Could not cancel the render.";
+            try {
+              message = JSON.parse(text).error || message;
+            } catch (e) {
+              /* non-JSON error body */
+            }
+            throw new Error(message);
+          });
+        }
+        cancelRender("Video generation cancelled.");
+      })
+      .catch((error) => {
+        // Allow a retry: the render may still be running.
+        cancelButton.disabled = false;
+        cancelLabel.textContent = "Cancel";
+        status.hidden = false;
+        status.classList.add("error");
+        status.textContent = "Something went wrong: " + error.message;
+        console.error("[face-guide] cancel failed:", error.message);
+      });
   });
 
   // Landing → editor

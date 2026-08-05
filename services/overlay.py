@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 
 import config
-from services import media
+from services import RenderCancelled, media
 
 
 def _load_tracking(track_json):
@@ -104,7 +104,7 @@ def _overlay(frame, png, x, y, scale_x, scale_y, rotation, opacity):
 
 
 def render_bg_preview(face_png, track_json, bg_video, output_video, tmp_dir,
-                      progress_callback=None):
+                      progress_callback=None, should_cancel=None):
     """Render the face animation over the background video.
 
     Writes an OpenCV mp4v temp video, then remuxes the background's
@@ -113,6 +113,9 @@ def render_bg_preview(face_png, track_json, bg_video, output_video, tmp_dir,
     `progress_callback(phase, frame, total)` is invoked per frame
     (phase "overlay") and once before the audio remux (phase "remux").
     It is best-effort: exceptions inside it never abort the render.
+
+    `should_cancel()` (optional) is checked per frame; when it returns
+    True the render aborts by raising `RenderCancelled`.
     """
     track_by_frame = _load_tracking(track_json)
 
@@ -153,66 +156,78 @@ def render_bg_preview(face_png, track_json, bg_video, output_video, tmp_dir,
     frame_no = 0
 
     try:
-        while True:
-            ret, frame = cap.read()
+        # The mp4v writer finalizes its moov atom only on release(), and
+        # ffmpeg reads the temp file right after — so the writer must be
+        # released before the remux. The inner finally guarantees that
+        # even when the frame loop is cancelled mid-render.
+        try:
+            while True:
+                if should_cancel is not None and should_cancel():
+                    raise RenderCancelled("Render cancelled by user")
 
-            if not ret:
-                break
+                ret, frame = cap.read()
 
-            if frame_no in track_by_frame:
-                t = track_by_frame[frame_no]
+                if not ret:
+                    break
 
-                opacity = float(t.get("opacity", 1))
+                if frame_no in track_by_frame:
+                    t = track_by_frame[frame_no]
 
-                if opacity > 0:
-                    frame = _overlay(
-                        frame,
-                        face,
-                        float(t.get("x", 0)),
-                        float(t.get("y", 0)),
-                        float(t.get("scaleX", 100)),
-                        float(t.get("scaleY", 100)),
-                        float(t.get("rotation", 0)),
-                        opacity,
-                    )
+                    opacity = float(t.get("opacity", 1))
 
-            writer.write(frame)
-            frame_no += 1
+                    if opacity > 0:
+                        frame = _overlay(
+                            frame,
+                            face,
+                            float(t.get("x", 0)),
+                            float(t.get("y", 0)),
+                            float(t.get("scaleX", 100)),
+                            float(t.get("scaleY", 100)),
+                            float(t.get("rotation", 0)),
+                            opacity,
+                        )
 
-            if progress_callback is not None:
+                writer.write(frame)
+                frame_no += 1
+
+                if progress_callback is not None:
+                    try:
+                        progress_callback("overlay", frame_no, total_frames)
+                    except Exception:
+                        pass  # progress reporting is best-effort
+        finally:
+            cap.release()
+            writer.release()
+
+        if progress_callback is not None:
+            def _remux_progress(frac):
                 try:
-                    progress_callback("overlay", frame_no, total_frames)
+                    progress_callback("remux_bg", frac, 1)
                 except Exception:
                     pass  # progress reporting is best-effort
-    finally:
-        cap.release()
-        writer.release()
 
-    if progress_callback is not None:
-        def _remux_progress(frac):
+            # Mark the remux start: ffmpeg may finish too fast to report
+            # intermediate values, so the UI still sees the phase change.
             try:
-                progress_callback("remux_bg", frac, 1)
+                progress_callback("remux_bg", 0, 1)
             except Exception:
-                pass  # progress reporting is best-effort
+                pass
+        else:
+            _remux_progress = None
 
-        # Mark the remux start: ffmpeg may finish too fast to report
-        # intermediate values, so the UI still sees the phase change.
-        try:
-            progress_callback("remux_bg", 0, 1)
-        except Exception:
-            pass
-    else:
-        _remux_progress = None
-
-    try:
         media.remux_audio(
             temp_video, bg_video, output_video,
             remux_progress=_remux_progress,
             duration=(total_frames / fps) if fps else None,
+            should_cancel=should_cancel,
         )
     finally:
-        # Clean up the temp video even if the remux fails.
-        if os.path.exists(temp_video):
-            os.remove(temp_video)
+        # Clean up the temp video on every exit path (normal completion,
+        # failure, or cancellation).
+        try:
+            if os.path.exists(temp_video):
+                os.remove(temp_video)
+        except OSError:
+            pass
 
     return output_video
